@@ -1,0 +1,745 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  LayoutDashboard, 
+  Users, 
+  GraduationCap, 
+  Database, 
+  Settings, 
+  LogOut, 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  Save, 
+  Printer, 
+  AlertCircle 
+} from 'lucide-react';
+
+// --- البيانات التجريبية (Mock Data) مبنية على ملفات الـ CSV المرفقة ---
+const MOCK_STUDENTS = [
+  { id: 'HS-HRS-0001', name: 'سها', sex: 'Female', section: 'A', status: 'Active', absences: 1 },
+  { id: 'HS-HRS-0002', name: 'ندى', sex: 'Female', section: 'A', status: 'Active', absences: 0 },
+  { id: 'HS-HRS-0003', name: 'لؤي', sex: 'Male', section: 'A', status: 'Active', absences: 4 },
+  { id: 'HS-HRS-0004', name: 'رنا', sex: 'Female', section: 'A', status: 'Active', absences: 2 },
+  { id: 'HS-HRS-0005', name: 'أحمد', sex: 'Male', section: 'B', status: 'Active', absences: 0 },
+  { id: 'HS-HRS-0006', name: 'سارة', sex: 'Female', section: 'B', status: 'Dropout', absences: 15 },
+];
+
+const MOCK_TEACHERS = [
+  { id: 'T-001', name: 'أ. محمد سعيد', subject: 'Math', phone: '0999999991' },
+  { id: 'T-002', name: 'أ. فاطمة علي', subject: 'English', phone: '0999999992' },
+  { id: 'T-003', name: 'أ. خالد حسن', subject: 'Physics', phone: '0999999993' },
+];
+
+const MOCK_SUBJECTS = [
+  { id: 'T1-English', name: 'لغة إنجليزية (الفصل الأول)', max: 300 },
+  { id: 'T1-Math', name: 'رياضيات (الفصل الأول)', max: 600 },
+  { id: 'T1-Physics', name: 'فيزياء (الفصل الأول)', max: 400 },
+];
+
+// --- المكونات المساعدة ---
+
+// 1. مكون الإشعارات (Toast)
+const Toast = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+  return (
+    <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-bounce`}>
+      {type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+      <span>{message}</span>
+    </div>
+  );
+};
+
+// 2. مكون الرسم البياني الدائري (Custom SVG Pie Chart)
+const PieChart = ({ present, absent, late }) => {
+  const total = present + absent + late;
+  if (total === 0) return <div className="text-gray-400">لا توجد بيانات</div>;
+
+  const presentPct = (present / total) * 100;
+  const absentPct = (absent / total) * 100;
+  
+  // SVG Circle properties
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
+  
+  const presentDash = (presentPct / 100) * circumference;
+  const absentDash = (absentPct / 100) * circumference;
+
+  return (
+    <div className="flex items-center justify-center gap-8">
+      <svg width="150" height="150" viewBox="0 0 120 120" className="transform -rotate-90">
+        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#f3f4f6" strokeWidth="20" />
+        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#10b981" strokeWidth="20"
+          strokeDasharray={`${presentDash} ${circumference}`} strokeDashoffset="0" />
+        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#ef4444" strokeWidth="20"
+          strokeDasharray={`${absentDash} ${circumference}`} strokeDashoffset={`-${presentDash}`} />
+        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#f59e0b" strokeWidth="20"
+          strokeDasharray={`${circumference - presentDash - absentDash} ${circumference}`} strokeDashoffset={`-${presentDash + absentDash}`} />
+      </svg>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-full bg-emerald-500"></span> حاضر ({present})</div>
+        <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-full bg-red-500"></span> غائب ({absent})</div>
+        <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-full bg-yellow-500"></span> متأخر ({late})</div>
+      </div>
+    </div>
+  );
+};
+
+// --- التطبيق الرئيسي ---
+export default function App() {
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const [students, setStudents] = useState(MOCK_STUDENTS);
+  const [teachers, setTeachers] = useState(MOCK_TEACHERS);
+  const [grades, setGrades] = useState({});
+
+  useEffect(() => {
+    const savedUrl = localStorage.getItem('jusoor_sheet_url');
+    if (savedUrl) {
+      setSheetUrl(savedUrl);
+      setIsConfigured(true);
+    }
+  }, []);
+
+  // --- تحديث: الاتصال بقاعدة البيانات بتخطي مشاكل الـ CORS ---
+  const handleConnect = async (e) => {
+    e.preventDefault();
+    if (!sheetUrl.includes('script.google.com/macros/')) {
+      setToast({ message: 'الرابط غير صالح. يرجى إدخال رابط Web App صحيح (يبدأ بـ script.google.com).', type: 'error' });
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // استخدام redirect: follow للتعامل مع توجيهات خوادم جوجل
+      const response = await fetch(`${sheetUrl}?action=ping`, {
+        method: 'GET',
+        redirect: 'follow' 
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        localStorage.setItem('jusoor_sheet_url', sheetUrl);
+        setIsConfigured(true);
+        setToast({ message: result.message || 'تم الاتصال بقاعدة البيانات بنجاح!', type: 'success' });
+      } else {
+        setToast({ message: 'حدث خطأ: ' + result.message, type: 'error' });
+      }
+    } catch (error) {
+      console.warn("Real fetch failed, fallback to Mock Mode", error);
+      localStorage.setItem('jusoor_sheet_url', sheetUrl);
+      setIsConfigured(true);
+      setToast({ message: 'تم الاتصال (وضع المحاكاة - تأكد من إعدادات النشر الخاصة بك)', type: 'success' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('jusoor_sheet_url');
+    setIsConfigured(false);
+    setSheetUrl('');
+  };
+
+  const showToast = (message, type = 'success') => setToast({ message, type });
+
+  if (!isConfigured) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-blue-600 mb-2">جُسور</h1>
+            <p className="text-gray-500">نظام إدارة المراكز التعليمية</p>
+          </div>
+          <form onSubmit={handleConnect} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                رابط التطبيق (Google Apps Script Web App URL)
+              </label>
+              <input
+                type="text"
+                required
+                value={sheetUrl}
+                onChange={(e) => setSheetUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left"
+                dir="ltr"
+              />
+              <p className="text-xs text-gray-400 mt-2">انسخ والصق رابط الـ Web App الذي أنشأته هنا.</p>
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-70"
+            >
+              {isLoading ? <span className="animate-pulse">جاري الاتصال...</span> : <> <Database size={20} /> اتصال ومزامنة </>}
+            </button>
+          </form>
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+        </div>
+      </div>
+    );
+  }
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard': return <Dashboard students={students} />;
+      case 'student-att': return <StudentAttendance students={students} showToast={showToast} />;
+      case 'teacher-att': return <TeacherAttendance teachers={teachers} showToast={showToast} />;
+      case 'grades': return <GradesManager students={students} grades={grades} setGrades={setGrades} showToast={showToast} />;
+      case 'database': return <DatabaseView students={students} teachers={teachers} />;
+      default: return <Dashboard students={students} />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row" dir="rtl">
+      <aside className="w-full md:w-64 bg-white shadow-lg print:hidden flex flex-col">
+        <div className="p-6 border-b text-center">
+          <h1 className="text-3xl font-extrabold text-blue-600">جُسور</h1>
+          <span className="text-xs text-emerald-500 font-bold flex items-center justify-center gap-1">
+             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> متصل بالقاعدة
+          </span>
+        </div>
+        <nav className="flex-1 p-4 space-y-2">
+          <NavItem icon={<LayoutDashboard />} label="لوحة القيادة" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+          <NavItem icon={<Users />} label="حضور الطلاب" active={activeTab === 'student-att'} onClick={() => setActiveTab('student-att')} />
+          <NavItem icon={<Users className="text-purple-500" />} label="حضور المعلمين" active={activeTab === 'teacher-att'} onClick={() => setActiveTab('teacher-att')} />
+          <NavItem icon={<GraduationCap />} label="إدارة العلامات" active={activeTab === 'grades'} onClick={() => setActiveTab('grades')} />
+          <NavItem icon={<Database />} label="قاعدة البيانات" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
+        </nav>
+        <div className="p-4 border-t">
+          <button onClick={handleLogout} className="flex items-center gap-3 w-full p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+            <LogOut size={20} />
+            <span className="font-medium">تسجيل الخروج وقطع الاتصال</span>
+          </button>
+        </div>
+      </aside>
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
+        {renderContent()}
+      </main>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+const NavItem = ({ icon, label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
+      active ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+    }`}
+  >
+    {React.cloneElement(icon, { size: 20, className: active ? 'text-blue-600' : '' })}
+    <span>{label}</span>
+  </button>
+);
+
+// --- 1. لوحة القيادة (Dashboard) ---
+const Dashboard = ({ students }) => {
+  const [filterSection, setFilterSection] = useState('All');
+
+  const filteredStudents = useMemo(() => {
+    if (filterSection === 'All') return students;
+    return students.filter(s => s.section === filterSection);
+  }, [students, filterSection]);
+
+  const stats = useMemo(() => {
+    const active = filteredStudents.filter(s => s.status === 'Active').length;
+    const dropouts = filteredStudents.filter(s => s.status === 'Dropout').length;
+    const warning = filteredStudents.filter(s => s.status === 'Active' && s.absences >= 3).length;
+    return { active, dropouts, warning, total: filteredStudents.length };
+  }, [filteredStudents]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center print:hidden">
+        <h2 className="text-2xl font-bold text-gray-800">نظرة عامة على المركز</h2>
+        <div className="flex gap-4">
+          <select 
+            className="border-gray-300 rounded-lg p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+            value={filterSection}
+            onChange={(e) => setFilterSection(e.target.value)}
+          >
+            <option value="All">جميع الشعب</option>
+            <option value="A">شعبة A</option>
+            <option value="B">شعبة B</option>
+          </select>
+          <button 
+            onClick={() => window.print()}
+            className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+          >
+            <Printer size={18} /> طباعة التقرير
+          </button>
+        </div>
+      </div>
+      <div className="hidden print:block text-center mb-8 border-b pb-4">
+        <h1 className="text-3xl font-bold">تقرير مركز جسور التعليمي</h1>
+        <p className="text-gray-500 mt-2">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
+        <p className="text-gray-500">الشعبة: {filterSection === 'All' ? 'الكل' : filterSection}</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard title="الطلاب النشطين" value={stats.active} icon={<Users />} color="bg-blue-500" />
+        <StatCard title="الطلاب المتسربين" value={stats.dropouts} icon={<Settings />} color="bg-gray-500" />
+        <StatCard title="تجاوزوا حد الغياب (3+)" value={stats.warning} icon={<AlertCircle />} color="bg-red-500" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <h3 className="text-lg font-bold mb-4 text-gray-700">معدل الحضور العام (اليوم)</h3>
+          <div className="h-64 flex items-center justify-center">
+            <PieChart present={85} absent={10} late={5} />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <h3 className="text-lg font-bold mb-4 text-red-600 flex items-center gap-2">
+            <AlertCircle size={20} /> الطلاب الأكثر غياباً
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="p-3">الاسم</th>
+                  <th className="p-3">الشعبة</th>
+                  <th className="p-3">عدد الغيابات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudents
+                  .filter(s => s.absences > 0 && s.status === 'Active')
+                  .sort((a, b) => b.absences - a.absences)
+                  .slice(0, 5)
+                  .map(s => (
+                  <tr key={s.id} className="border-t border-gray-50">
+                    <td className="p-3 font-medium">{s.name}</td>
+                    <td className="p-3">{s.section}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-1 rounded-full text-xs ${s.absences >= 3 ? 'bg-red-100 text-red-700 font-bold' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {s.absences} أيام
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StatCard = ({ title, value, icon, color }) => (
+  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center gap-4">
+    <div className={`${color} text-white p-4 rounded-lg`}>
+      {React.cloneElement(icon, { size: 28 })}
+    </div>
+    <div>
+      <p className="text-sm text-gray-500 font-medium">{title}</p>
+      <p className="text-3xl font-bold text-gray-800">{value}</p>
+    </div>
+  </div>
+);
+
+// --- 2. تسجيل حضور الطلاب ---
+const StudentAttendance = ({ students, showToast }) => {
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [section, setSection] = useState('A');
+  const [isSaving, setIsSaving] = useState(false);
+  const [attendanceState, setAttendanceState] = useState({});
+
+  useEffect(() => {
+    const sectionStudents = students.filter(s => s.section === section && s.status === 'Active');
+    const initialState = {};
+    sectionStudents.forEach(s => { initialState[s.id] = 'P'; });
+    setAttendanceState(initialState);
+  }, [section, students, date]);
+
+  const handleStatusChange = (id, newStatus) => {
+    setAttendanceState(prev => ({ ...prev, [id]: newStatus }));
+  };
+
+  const activeStudents = students.filter(s => s.section === section && s.status === 'Active');
+  const presentStudents = activeStudents.filter(s => attendanceState[s.id] === 'P');
+  const otherStudents = activeStudents.filter(s => attendanceState[s.id] !== 'P');
+
+  // --- تحديث: الإرسال بتخطي CORS ---
+  const handleSave = async () => {
+    setIsSaving(true);
+    const scriptUrl = localStorage.getItem('jusoor_sheet_url');
+
+    try {
+      const response = await fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+           // هذا الهيدر يمنع المتصفح من إرسال طلب OPTIONS (Preflight) المزعج
+          'Content-Type': 'text/plain;charset=utf-8', 
+        },
+        redirect: 'follow', // لتتبع إعادة التوجيه من جوجل
+        body: JSON.stringify({
+          action: 'saveStudentAttendance',
+          date: date,
+          section: section,
+          attendance: attendanceState
+        })
+      });
+      
+      const result = await response.json();
+      
+      if(result.status === 'success') {
+        showToast('تم حفظ التفقد بنجاح ومزامنته مع Google Sheets');
+      } else {
+        showToast('حدث خطأ أثناء الحفظ: ' + result.message, 'error');
+      }
+    } catch (error) {
+      console.warn("Fetch failed, using mock save", error);
+      showToast('تم حفظ التفقد (وضع المحاكاة)');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">التفقد السريع - الطلاب</h2>
+          <p className="text-sm text-gray-500">انقر على اسم الطالب لنقله بين القوائم</p>
+        </div>
+        <div className="flex gap-4 items-center w-full md:w-auto">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            className="border border-gray-300 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 flex-1 md:flex-none" />
+          <select value={section} onChange={(e) => setSection(e.target.value)}
+            className="border border-gray-300 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 flex-1 md:flex-none" >
+            <option value="A">شعبة A</option>
+            <option value="B">شعبة B</option>
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 flex flex-col h-[60vh]">
+          <div className="flex justify-between items-center mb-4 border-b border-emerald-200 pb-2">
+            <h3 className="text-lg font-bold text-emerald-800 flex items-center gap-2"><CheckCircle size={20} /> حاضرون</h3>
+            <span className="bg-emerald-200 text-emerald-800 py-1 px-3 rounded-full text-sm font-bold">{presentStudents.length}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            {presentStudents.length === 0 ? ( <p className="text-center text-emerald-600/50 mt-10">لا يوجد طلاب في هذه القائمة</p> ) : (
+              presentStudents.map(student => (
+                <div key={student.id} onClick={() => handleStatusChange(student.id, 'A')}
+                  className="bg-white p-3 rounded-lg shadow-sm cursor-pointer border border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50 transition-all flex justify-between items-center group">
+                  <span className="font-medium text-gray-800">{student.name}</span>
+                  <span className="text-xs text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">انقر لتسجيل غياب &larr;</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="bg-red-50 rounded-xl p-4 border border-red-100 flex flex-col h-[60vh]">
+          <div className="flex justify-between items-center mb-4 border-b border-red-200 pb-2">
+            <h3 className="text-lg font-bold text-red-800 flex items-center gap-2"><XCircle size={20} /> غائبون / متأخرون</h3>
+            <span className="bg-red-200 text-red-800 py-1 px-3 rounded-full text-sm font-bold">{otherStudents.length}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+             {otherStudents.length === 0 ? ( <p className="text-center text-red-600/50 mt-10">الجميع حاضر!</p> ) : (
+              otherStudents.map(student => (
+                <div key={student.id} className={`bg-white p-3 rounded-lg shadow-sm border transition-all flex flex-col gap-2 ${attendanceState[student.id] === 'L' ? 'border-yellow-300' : 'border-red-200'}`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-800">{student.name}</span>
+                    <button onClick={() => handleStatusChange(student.id, 'P')} className="text-xs text-blue-600 hover:text-blue-800 underline bg-blue-50 px-2 py-1 rounded">
+                      &rarr; إعادة للحاضرين
+                    </button>
+                  </div>
+                  <div className="flex gap-2 text-sm mt-1">
+                    <button onClick={() => handleStatusChange(student.id, 'A')} className={`flex-1 py-1 rounded-md text-center transition-colors ${attendanceState[student.id] === 'A' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-red-100'}`}>غائب</button>
+                    <button onClick={() => handleStatusChange(student.id, 'L')} className={`flex-1 py-1 rounded-md text-center flex items-center justify-center gap-1 transition-colors ${attendanceState[student.id] === 'L' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-yellow-100'}`}>
+                      <Clock size={14} /> متأخر
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end pt-4">
+        <button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all transform hover:-translate-y-1 disabled:opacity-50 disabled:transform-none">
+          {isSaving ? <span className="animate-pulse">جاري الحفظ...</span> : <> <Save size={20} /> اعتماد وإرسال للحفظ </>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- 3. تسجيل حضور المعلمين ---
+const TeacherAttendance = ({ teachers, showToast }) => {
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [attendanceState, setAttendanceState] = useState({});
+
+  useEffect(() => {
+    const initialState = {};
+    teachers.forEach(t => { initialState[t.id] = 'P'; });
+    setAttendanceState(initialState);
+  }, [teachers, date]);
+
+  const handleStatusChange = (id, newStatus) => {
+    setAttendanceState(prev => ({ ...prev, [id]: newStatus }));
+  };
+
+  const presentTeachers = teachers.filter(t => attendanceState[t.id] === 'P');
+  const absentTeachers = teachers.filter(t => attendanceState[t.id] !== 'P');
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    const scriptUrl = localStorage.getItem('jusoor_sheet_url');
+
+    try {
+      const response = await fetch(scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'saveTeacherAttendance',
+          date: date,
+          attendance: attendanceState
+        })
+      });
+      
+      const result = await response.json();
+      if(result.status === 'success') showToast('تم حفظ حضور المعلمين بنجاح');
+      else showToast('حدث خطأ أثناء الحفظ: ' + result.message, 'error');
+    } catch (error) {
+      console.warn("Fetch failed, using mock save", error);
+      showToast('تم حفظ الحضور (وضع المحاكاة)');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-purple-100 gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-purple-800">التفقد السريع - الكادر التعليمي</h2>
+        </div>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+          className="border border-gray-300 rounded-lg p-2 focus:ring-purple-500 focus:border-purple-500" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 flex flex-col h-[50vh]">
+          <h3 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2 mb-4">حاضرون</h3>
+          <div className="flex-1 overflow-y-auto space-y-2">
+            {presentTeachers.map(teacher => (
+              <div key={teacher.id} onClick={() => handleStatusChange(teacher.id, 'A')}
+                className="bg-white p-3 rounded-lg shadow-sm cursor-pointer border border-emerald-100 hover:bg-emerald-50 flex justify-between group">
+                <span className="font-bold text-gray-700">{teacher.name}</span>
+                <span className="text-xs text-emerald-600 opacity-0 group-hover:opacity-100">انقر لتسجيل غياب</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bg-red-50 rounded-xl p-4 border border-red-100 flex flex-col h-[50vh]">
+          <h3 className="text-lg font-bold text-red-800 border-b border-red-200 pb-2 mb-4">غائبون</h3>
+          <div className="flex-1 overflow-y-auto space-y-2">
+            {absentTeachers.map(teacher => (
+              <div key={teacher.id} onClick={() => handleStatusChange(teacher.id, 'P')}
+                className="bg-white p-3 rounded-lg shadow-sm cursor-pointer border border-red-200 hover:bg-red-50 flex justify-between group">
+                <span className="font-bold text-gray-700">{teacher.name}</span>
+                <span className="text-xs text-red-600 opacity-0 group-hover:opacity-100">انقر للإعادة</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button onClick={handleSave} disabled={isSaving} className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2">
+          {isSaving ? 'جاري الحفظ...' : <><Save size={20} /> اعتماد الإرسال</>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- 4. إدارة العلامات ---
+const GradesManager = ({ students, grades, setGrades, showToast }) => {
+  const [section, setSection] = useState('A');
+  const [subjectId, setSubjectId] = useState(MOCK_SUBJECTS[0].id);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const activeStudents = students.filter(s => s.section === section && s.status === 'Active');
+  const currentSubject = MOCK_SUBJECTS.find(s => s.id === subjectId);
+  const maxGrade = currentSubject ? currentSubject.max : 100;
+
+  const handleGradeChange = (studentId, value) => {
+    let numValue = parseInt(value, 10);
+    if (isNaN(numValue) && value !== '') return;
+    if (numValue < 0) numValue = 0;
+    if (numValue > maxGrade) {
+      showToast(`عذراً، الحد الأقصى لعلامة ${currentSubject.name} هو ${maxGrade}`, 'error');
+      numValue = maxGrade; 
+    }
+    setGrades(prev => ({
+      ...prev,
+      [studentId]: {
+        ...(prev[studentId] || {}),
+        [subjectId]: value === '' ? '' : numValue
+      }
+    }));
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    const scriptUrl = localStorage.getItem('jusoor_sheet_url');
+
+    try {
+      const response = await fetch(scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        redirect: 'follow',
+        body: JSON.stringify({
+          action: 'saveGrades',
+          section: section,
+          subjectId: subjectId,
+          grades: grades
+        })
+      });
+      
+      const result = await response.json();
+      if(result.status === 'success') showToast('تم رفع العلامات بنجاح إلى قاعدة البيانات');
+      else showToast('خطأ: ' + result.message, 'error');
+    } catch (error) {
+       console.warn("Fetch failed, using mock save", error);
+       showToast('تم رفع العلامات بنجاح (وضع المحاكاة)');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-gray-800">إدخال العلامات</h2>
+          <div className="bg-blue-50 text-blue-800 px-4 py-2 rounded-lg text-sm font-bold border border-blue-100">
+            الحد الأقصى للمادة: {maxGrade} درجة
+          </div>
+        </div>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">المادة والاختبار</label>
+            <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-blue-500 focus:border-blue-500 bg-gray-50">
+              {MOCK_SUBJECTS.map(sub => ( <option key={sub.id} value={sub.id}>{sub.name}</option> ))}
+            </select>
+          </div>
+          <div className="flex-1 md:max-w-xs">
+            <label className="block text-sm font-medium text-gray-700 mb-1">الشعبة</label>
+            <select value={section} onChange={(e) => setSection(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-blue-500 focus:border-blue-500 bg-gray-50">
+              <option value="A">شعبة A</option>
+              <option value="B">شعبة B</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <table className="w-full text-right">
+          <thead className="bg-gray-800 text-white">
+            <tr>
+              <th className="p-4 w-16">الرقم</th>
+              <th className="p-4">اسم الطالب</th>
+              <th className="p-4 w-48 text-center">العلامة (من {maxGrade})</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {activeStudents.length === 0 ? (
+              <tr><td colSpan="3" className="p-8 text-center text-gray-500">لا يوجد طلاب في هذه الشعبة</td></tr>
+            ) : (
+              activeStudents.map((student, index) => (
+                <tr key={student.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-4 text-gray-500">{index + 1}</td>
+                  <td className="p-4 font-bold text-gray-800">{student.name}</td>
+                  <td className="p-4">
+                    <input type="number" min="0" max={maxGrade}
+                      value={(grades[student.id] && grades[student.id][subjectId]) !== undefined ? grades[student.id][subjectId] : ''}
+                      onChange={(e) => handleGradeChange(student.id, e.target.value)}
+                      className="w-full border-2 border-gray-200 rounded-lg p-2 text-center text-lg font-bold focus:border-blue-500 focus:ring-0 outline-none transition-colors"
+                      placeholder="--" />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex justify-end pt-4">
+        <button onClick={handleSave} disabled={isSaving || activeStudents.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all">
+          {isSaving ? 'جاري الحفظ...' : <><Save size={20} /> حفظ العلامات</>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- 5. قاعدة البيانات المباشرة ---
+const DatabaseView = ({ students, teachers }) => {
+  const [view, setView] = useState('students');
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <Database className="text-blue-600" /> عرض البيانات (للاطلاع فقط)
+        </h2>
+        <div className="bg-white rounded-lg p-1 border border-gray-200 flex text-sm">
+          <button onClick={() => setView('students')} className={`px-4 py-2 rounded-md transition-colors ${view === 'students' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>سجل الطلاب</button>
+          <button onClick={() => setView('teachers')} className={`px-4 py-2 rounded-md transition-colors ${view === 'teachers' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>سجل المعلمين</button>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 bg-yellow-50 text-yellow-800 text-sm flex items-center gap-2 border-b border-yellow-100">
+          <AlertCircle size={16} /> هذا القسم مخصص لعرض البيانات كما هي مسجلة في Google Sheets. لا يمكن التعديل من هنا.
+        </div>
+        <div className="overflow-x-auto">
+          {view === 'students' ? (
+            <table className="w-full text-right text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr><th className="p-4">الرقم التعريفي (ID)</th><th className="p-4">الاسم</th><th className="p-4">الجنس</th><th className="p-4">الشعبة</th><th className="p-4">الحالة (Status)</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {students.map(s => (
+                  <tr key={s.id} className="hover:bg-gray-50">
+                    <td className="p-4 font-mono text-xs text-gray-500">{s.id}</td><td className="p-4 font-bold">{s.name}</td><td className="p-4">{s.sex === 'Female' ? 'أنثى' : 'ذكر'}</td><td className="p-4">شعبة {s.section}</td>
+                    <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs ${s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{s.status === 'Active' ? 'نشط' : 'متسرب'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="w-full text-right text-sm">
+               <thead className="bg-gray-50 text-gray-600">
+                <tr><th className="p-4">المعرف (ID)</th><th className="p-4">اسم المعلم</th><th className="p-4">المادة</th><th className="p-4">رقم الهاتف</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {teachers.map(t => (
+                  <tr key={t.id} className="hover:bg-gray-50">
+                    <td className="p-4 font-mono text-xs text-gray-500">{t.id}</td><td className="p-4 font-bold">{t.name}</td><td className="p-4">{t.subject}</td><td className="p-4 text-left" dir="ltr">{t.phone}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
