@@ -1372,7 +1372,6 @@
    * الرابط يبدأ بـ: https://script.google.com/macros/s/.../exec
    */
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbyLZHFVW7S4NFcPJW9hweRZ0BMCUjiigBhCVce1nmhr2ZHDf5ZtM0E2vx5UEVxARLxg/exec';
-
   /**
    * gasCall(fnName, ...args) → Promise
    * بيئة Apps Script  → google.script.run
