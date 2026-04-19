@@ -1,745 +1,1672 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LayoutDashboard, 
-  Users, 
-  GraduationCap, 
-  Database, 
-  Settings, 
-  LogOut, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  Save, 
-  Printer, 
-  AlertCircle 
-} from 'lucide-react';
-
-// --- البيانات التجريبية (Mock Data) مبنية على ملفات الـ CSV المرفقة ---
-const MOCK_STUDENTS = [
-  { id: 'HS-HRS-0001', name: 'سها', sex: 'Female', section: 'A', status: 'Active', absences: 1 },
-  { id: 'HS-HRS-0002', name: 'ندى', sex: 'Female', section: 'A', status: 'Active', absences: 0 },
-  { id: 'HS-HRS-0003', name: 'لؤي', sex: 'Male', section: 'A', status: 'Active', absences: 4 },
-  { id: 'HS-HRS-0004', name: 'رنا', sex: 'Female', section: 'A', status: 'Active', absences: 2 },
-  { id: 'HS-HRS-0005', name: 'أحمد', sex: 'Male', section: 'B', status: 'Active', absences: 0 },
-  { id: 'HS-HRS-0006', name: 'سارة', sex: 'Female', section: 'B', status: 'Dropout', absences: 15 },
-];
-
-const MOCK_TEACHERS = [
-  { id: 'T-001', name: 'أ. محمد سعيد', subject: 'Math', phone: '0999999991' },
-  { id: 'T-002', name: 'أ. فاطمة علي', subject: 'English', phone: '0999999992' },
-  { id: 'T-003', name: 'أ. خالد حسن', subject: 'Physics', phone: '0999999993' },
-];
-
-const MOCK_SUBJECTS = [
-  { id: 'T1-English', name: 'لغة إنجليزية (الفصل الأول)', max: 300 },
-  { id: 'T1-Math', name: 'رياضيات (الفصل الأول)', max: 600 },
-  { id: 'T1-Physics', name: 'فيزياء (الفصل الأول)', max: 400 },
-];
-
-// --- المكونات المساعدة ---
-
-// 1. مكون الإشعارات (Toast)
-const Toast = ({ message, type, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
-  return (
-    <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-bounce`}>
-      {type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-      <span>{message}</span>
-    </div>
-  );
-};
-
-// 2. مكون الرسم البياني الدائري (Custom SVG Pie Chart)
-const PieChart = ({ present, absent, late }) => {
-  const total = present + absent + late;
-  if (total === 0) return <div className="text-gray-400">لا توجد بيانات</div>;
-
-  const presentPct = (present / total) * 100;
-  const absentPct = (absent / total) * 100;
-  
-  // SVG Circle properties
-  const radius = 50;
-  const circumference = 2 * Math.PI * radius;
-  
-  const presentDash = (presentPct / 100) * circumference;
-  const absentDash = (absentPct / 100) * circumference;
-
-  return (
-    <div className="flex items-center justify-center gap-8">
-      <svg width="150" height="150" viewBox="0 0 120 120" className="transform -rotate-90">
-        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#f3f4f6" strokeWidth="20" />
-        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#10b981" strokeWidth="20"
-          strokeDasharray={`${presentDash} ${circumference}`} strokeDashoffset="0" />
-        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#ef4444" strokeWidth="20"
-          strokeDasharray={`${absentDash} ${circumference}`} strokeDashoffset={`-${presentDash}`} />
-        <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#f59e0b" strokeWidth="20"
-          strokeDasharray={`${circumference - presentDash - absentDash} ${circumference}`} strokeDashoffset={`-${presentDash + absentDash}`} />
-      </svg>
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-full bg-emerald-500"></span> حاضر ({present})</div>
-        <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-full bg-red-500"></span> غائب ({absent})</div>
-        <div className="flex items-center gap-2"><span className="w-4 h-4 rounded-full bg-yellow-500"></span> متأخر ({late})</div>
-      </div>
-    </div>
-  );
-};
-
-// --- التطبيق الرئيسي ---
-export default function App() {
-  const [sheetUrl, setSheetUrl] = useState('');
-  const [isConfigured, setIsConfigured] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isLoading, setIsLoading] = useState(false);
-  const [toast, setToast] = useState(null);
-
-  const [students, setStudents] = useState(MOCK_STUDENTS);
-  const [teachers, setTeachers] = useState(MOCK_TEACHERS);
-  const [grades, setGrades] = useState({});
-
-  useEffect(() => {
-    const savedUrl = localStorage.getItem('jusoor_sheet_url');
-    if (savedUrl) {
-      setSheetUrl(savedUrl);
-      setIsConfigured(true);
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --font: 'IBM Plex Sans Arabic', system-ui, sans-serif;
+      --accent:       #e53e3e;
+      --accent-dark:  #c53030;
+      --accent-alpha: rgba(229,62,62,.13);
+      --green:        #16a34a;
+      --green-bg:     #f0fdf4;
+      --green-border: #bbf7d0;
+      --green-badge:  #dcfce7;
+      --green-text:   #15803d;
+      --red:          #dc2626;
+      --red-bg:       #fff5f5;
+      --red-border:   #fecaca;
+      --red-badge:    #fee2e2;
+      --red-text:     #b91c1c;
+      --bg:           #f4f6f9;
+      --surface:      #ffffff;
+      --surface-2:    #f8fafc;
+      --border:       rgba(0,0,0,.07);
+      --border-med:   rgba(0,0,0,.11);
+      --text-1:       #111827;
+      --text-2:       #6b7280;
+      --text-3:       #9ca3af;
+      --shadow-sm:    0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+      --shadow-md:    0 4px 14px rgba(0,0,0,.08);
+      --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
     }
-  }, []);
 
-  // --- تحديث: الاتصال بقاعدة البيانات بتخطي مشاكل الـ CORS ---
-  const handleConnect = async (e) => {
-    e.preventDefault();
-    if (!sheetUrl.includes('script.google.com/macros/')) {
-      setToast({ message: 'الرابط غير صالح. يرجى إدخال رابط Web App صحيح (يبدأ بـ script.google.com).', type: 'error' });
-      return;
+    [data-theme="dark"] {
+      --accent:       #fc8181;
+      --accent-dark:  #f56565;
+      --accent-alpha: rgba(252,129,129,.15);
+      --green:        #4ade80;
+      --green-bg:     rgba(20,83,45,.3);
+      --green-border: rgba(20,83,45,.55);
+      --green-badge:  rgba(20,83,45,.4);
+      --green-text:   #86efac;
+      --red:          #f87171;
+      --red-bg:       rgba(127,29,29,.3);
+      --red-border:   rgba(127,29,29,.55);
+      --red-badge:    rgba(127,29,29,.4);
+      --red-text:     #fca5a5;
+      --bg:           #0d1117;
+      --surface:      #161b22;
+      --surface-2:    #1e2530;
+      --border:       rgba(255,255,255,.06);
+      --border-med:   rgba(255,255,255,.10);
+      --text-1:       #e6edf3;
+      --text-2:       #8b949e;
+      --text-3:       #484f58;
+      --shadow-sm:    0 1px 3px rgba(0,0,0,.25);
+      --shadow-md:    0 4px 14px rgba(0,0,0,.35);
     }
-    
-    setIsLoading(true);
-    
-    try {
-      // استخدام redirect: follow للتعامل مع توجيهات خوادم جوجل
-      const response = await fetch(`${sheetUrl}?action=ping`, {
-        method: 'GET',
-        redirect: 'follow' 
-      });
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        localStorage.setItem('jusoor_sheet_url', sheetUrl);
-        setIsConfigured(true);
-        setToast({ message: result.message || 'تم الاتصال بقاعدة البيانات بنجاح!', type: 'success' });
-      } else {
-        setToast({ message: 'حدث خطأ: ' + result.message, type: 'error' });
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%}
+
+    body{
+      font-family:var(--font);
+      background:var(--bg);
+      color:var(--text-1);
+      min-height:100%;
+      padding-bottom:130px;
+      transition:background .25s,color .25s;
+      -webkit-tap-highlight-color:transparent;
+      touch-action:manipulation;
+      -webkit-font-smoothing:antialiased;
+      font-size:16px;
+      line-height:1.5;
+    }
+
+    /* ══════════════════════════════════════
+       HEADER – Responsive two-row layout
+       ══════════════════════════════════════ */
+    .hdr{
+      position:sticky;top:0;z-index:100;
+      background:var(--surface);
+      border-bottom:1px solid var(--border);
+      padding:0 22px;
+    }
+
+    .hdr-row{
+      display:flex;align-items:center;
+      justify-content:space-between;
+      height:64px;gap:10px;
+    }
+
+    /* On small screens, allow header to grow and wrap */
+    @media(max-width:640px){
+      .hdr{padding:0 14px}
+      .hdr-row{height:auto;flex-wrap:wrap;padding:10px 0;gap:8px}
+    }
+
+    .logo{display:flex;align-items:center;gap:11px;flex-shrink:0}
+
+    .logo-mark{
+      width:38px;height:38px;
+      background:var(--accent);
+      border-radius:var(--r-sm);
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;font-weight:700;color:#fff;
+    }
+
+    .logo-name{font-size:17px;font-weight:700;color:var(--text-1)}
+
+    /* Right side of header: groups controls */
+    .hdr-right{display:flex;align-items:center;gap:9px;flex-shrink:0}
+
+    /* On very small screens, controls wrap to a second row */
+    @media(max-width:640px){
+      .hdr-right{
+        width:100%;
+        flex-wrap:wrap;
+        justify-content:flex-end;
+        gap:7px;
       }
-    } catch (error) {
-      console.warn("Real fetch failed, fallback to Mock Mode", error);
-      localStorage.setItem('jusoor_sheet_url', sheetUrl);
-      setIsConfigured(true);
-      setToast({ message: 'تم الاتصال (وضع المحاكاة - تأكد من إعدادات النشر الخاصة بك)', type: 'success' });
-    } finally {
-      setIsLoading(false);
     }
-  };
 
-  const handleLogout = () => {
-    localStorage.removeItem('jusoor_sheet_url');
-    setIsConfigured(false);
-    setSheetUrl('');
-  };
+    /* shared control style */
+    .ctrl{
+      height:40px;
+      background:var(--surface-2);
+      border:1px solid var(--border-med);
+      border-radius:var(--r-sm);
+      font-family:var(--font);
+      font-size:14px;font-weight:500;
+      color:var(--text-1);
+      padding:0 12px;
+      outline:none;
+      transition:border-color .18s,box-shadow .18s;
+      cursor:pointer;
+      appearance:none;-webkit-appearance:none;
+    }
+    .ctrl:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-alpha)}
 
-  const showToast = (message, type = 'success') => setToast({ message, type });
+    /* Date picker wrapper with "today" indicator */
+    .date-wrap{position:relative;display:flex;align-items:center;}
 
-  if (!isConfigured) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-blue-600 mb-2">جُسور</h1>
-            <p className="text-gray-500">نظام إدارة المراكز التعليمية</p>
-          </div>
-          <form onSubmit={handleConnect} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                رابط التطبيق (Google Apps Script Web App URL)
-              </label>
-              <input
-                type="text"
-                required
-                value={sheetUrl}
-                onChange={(e) => setSheetUrl(e.target.value)}
-                placeholder="https://script.google.com/macros/s/.../exec"
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-left"
-                dir="ltr"
-              />
-              <p className="text-xs text-gray-400 mt-2">انسخ والصق رابط الـ Web App الذي أنشأته هنا.</p>
-            </div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-70"
-            >
-              {isLoading ? <span className="animate-pulse">جاري الاتصال...</span> : <> <Database size={20} /> اتصال ومزامنة </>}
-            </button>
-          </form>
-          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-        </div>
+    input[type="date"].ctrl{
+      min-width:140px;
+      padding-left:10px;
+    }
+
+    /* Flashing "اليوم" badge shown when selected date = today */
+    .today-badge{
+      position:absolute;
+      left:-2px;
+      top:50%;transform:translateY(-50%);
+      background:var(--accent);
+      color:#fff;
+      font-size:10px;font-weight:700;
+      padding:2px 6px;
+      border-radius:5px;
+      pointer-events:none;
+      display:none;
+      z-index:10;
+    }
+    /* When today is active push badge to top-left corner of input */
+    .date-wrap.is-today .today-badge{display:block}
+    .date-wrap.is-today input[type="date"].ctrl{
+      border-color:var(--accent);
+      box-shadow:0 0 0 2px var(--accent-alpha);
+    }
+
+    /* "Go to today" button */
+    .today-btn{
+      height:40px;padding:0 11px;
+      background:var(--surface-2);
+      border:1px solid var(--border-med);
+      border-radius:var(--r-sm);
+      font-family:var(--font);font-size:13px;font-weight:600;
+      color:var(--text-2);cursor:pointer;
+      transition:all .18s;
+      white-space:nowrap;
+    }
+    .today-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+    .dash-btn{
+      display:flex;align-items:center;gap:8px;
+      background:var(--surface-2);
+      border:1px solid var(--border-med);
+      color:var(--text-1);
+      padding:0 13px;
+      height:40px;
+      border-radius:var(--r-sm);
+      font-weight:600;font-size:14px;
+      cursor:pointer;
+      transition:all .2s;
+    }
+    .dash-btn.active{
+      background:var(--accent);color:#fff;border-color:var(--accent);
+    }
+
+    .sel-wrap{position:relative}
+    .sel-wrap select.ctrl{padding-left:28px}
+    .sel-arrow{
+      position:absolute;left:8px;top:50%;transform:translateY(-50%);
+      pointer-events:none;color:var(--text-3);display:flex;
+    }
+
+    .theme-btn{
+      width:40px;height:40px;
+      border-radius:var(--r-sm);
+      border:1px solid var(--border-med);
+      background:var(--surface-2);
+      color:var(--text-2);
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;flex-shrink:0;
+      transition:background .18s,color .18s;
+    }
+    .theme-btn:hover{background:var(--surface);color:var(--text-1)}
+
+    /* ── STATS ── */
+    .stats{
+      display:flex;gap:10px;padding:16px 22px;
+      flex-wrap:wrap;
+    }
+
+    @media(max-width:640px){
+      .stats{padding:12px 14px;gap:8px}
+    }
+
+    .stat{
+      flex:1;min-width:130px;
+      display:flex;align-items:center;gap:14px;
+      padding:14px 16px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--r-md);
+      box-shadow:var(--shadow-sm);
+    }
+
+    @media(max-width:400px){
+      .stat{padding:12px 12px;gap:10px}
+    }
+
+    .stat-ico{
+      width:44px;height:44px;
+      border-radius:var(--r-sm);
+      display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;
+    }
+    .stat-ico svg{width:19px;height:19px}
+    .stat-ico.g{background:var(--green-badge);color:var(--green-text)}
+    .stat-ico.r{background:var(--red-badge);color:var(--red-text)}
+    .stat-ico.b{background:rgba(59,130,246,0.1);color:#3b82f6}
+
+    .stat-num{font-size:28px;font-weight:700;line-height:1}
+    .stat-num.g{color:var(--green-text)}
+    .stat-num.r{color:var(--red-text)}
+    .stat-lbl{font-size:13px;font-weight:500;color:var(--text-2);margin-top:4px}
+
+    .pct{
+      margin-right:auto;
+      font-size:12px;font-weight:600;
+      padding:3px 10px;border-radius:20px;
+    }
+    .pct.g{background:var(--green-badge);color:var(--green-text)}
+    .pct.r{background:var(--red-badge);color:var(--red-text)}
+
+    /* ══════════════════════════════════════
+       TOOLBAR + QUICK-ACTION BUTTONS
+       ══════════════════════════════════════ */
+    .toolbar{
+      display:flex;align-items:center;
+      flex-wrap:wrap;
+      gap:9px;
+      padding:0 22px 14px;
+    }
+
+    @media(max-width:640px){
+      .toolbar{padding:0 14px 12px}
+    }
+
+    .srch-wrap{flex:1;min-width:160px;position:relative}
+    .srch-ico{
+      position:absolute;right:12px;top:50%;transform:translateY(-50%);
+      color:var(--text-3);pointer-events:none;display:flex;
+    }
+    .srch{
+      width:100%;height:42px;
+      background:var(--surface);
+      border:1px solid var(--border-med);
+      border-radius:var(--r-sm);
+      font-family:var(--font);font-size:15px;
+      color:var(--text-1);padding:0 40px 0 12px;outline:none;
+      transition:border-color .18s,box-shadow .18s;
+    }
+    .srch::placeholder{color:var(--text-3)}
+    .srch:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-alpha)}
+
+    /* Quick-action buttons: تحديد الكل / إلغاء تحديد الكل */
+    .qa-wrap{display:flex;gap:7px;flex-shrink:0}
+
+    .qa-btn{
+      height:42px;padding:0 13px;
+      border-radius:var(--r-sm);
+      border:1px solid;
+      font-family:var(--font);font-size:13px;font-weight:600;
+      cursor:pointer;
+      display:flex;align-items:center;gap:6px;
+      transition:opacity .15s,transform .12s;
+      white-space:nowrap;
+    }
+    .qa-btn:active{transform:scale(.97)}
+    .qa-btn.qa-g{
+      background:var(--green-bg);
+      border-color:var(--green-border);
+      color:var(--green-text);
+    }
+    .qa-btn.qa-r{
+      background:var(--red-bg);
+      border-color:var(--red-border);
+      color:var(--red-text);
+    }
+    .qa-btn svg{width:14px;height:14px}
+
+    @media(max-width:520px){
+      /* Show only icons on very small screens */
+      .qa-btn .qa-lbl{display:none}
+      .qa-btn{padding:0 11px;width:42px;justify-content:center}
+    }
+
+    /* tabs */
+    .tabs{
+      display:none;
+      background:var(--surface-2);
+      border:1px solid var(--border-med);
+      border-radius:var(--r-sm);
+      padding:4px;gap:4px;flex-shrink:0;
+    }
+    @media(max-width:767px){.tabs{display:flex}}
+
+    .tab{
+      height:34px;padding:0 13px;
+      border-radius:6px;border:none;
+      background:transparent;
+      font-family:var(--font);font-size:14px;font-weight:600;
+      color:var(--text-2);cursor:pointer;white-space:nowrap;
+      transition:background .14s,color .14s;
+    }
+    .tab.ag{background:var(--green-badge);color:var(--green-text)}
+    .tab.ar{background:var(--red-badge);color:var(--red-text)}
+
+    /* ══════════════════════════════════════
+       DASHBOARD LAYOUT
+       ══════════════════════════════════════ */
+    #dashboardUI{
+      padding:0 22px 40px;
+      animation:fadeIn .3s ease-out;
+    }
+
+    @media(max-width:640px){#dashboardUI{padding:0 14px 40px}}
+
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Dashboard meta bar: date range + overall rate */
+    .dash-meta{
+      display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+      margin-bottom:18px;
+      padding:12px 16px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--r-md);
+      box-shadow:var(--shadow-sm);
+    }
+    .dash-meta-item{
+      display:flex;align-items:center;gap:7px;
+      font-size:13px;font-weight:500;color:var(--text-2);
+    }
+    .dash-meta-item svg{width:15px;height:15px;color:var(--accent);flex-shrink:0}
+    .dash-meta-val{font-weight:700;color:var(--text-1)}
+    .dash-meta-divider{width:1px;height:20px;background:var(--border-med);flex-shrink:0}
+    @media(max-width:480px){.dash-meta-divider{display:none}}
+
+    .dash-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+      gap:18px;
+    }
+
+    .dash-card{
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--r-lg);
+      padding:22px;
+      box-shadow:var(--shadow-sm);
+    }
+    .dash-card-title{
+      font-size:15px;font-weight:700;
+      margin-bottom:18px;
+      display:flex;align-items:center;gap:9px;
+      color:var(--text-1);
+    }
+    .dash-card-title svg{width:17px;color:var(--accent);flex-shrink:0}
+
+    .chart-container{
+      position:relative;
+      height:240px;
+      width:100%;
+    }
+
+    @media(max-width:400px){
+      .chart-container{height:200px}
+    }
+
+    /* No-data placeholder */
+    .no-data-placeholder{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:200px;gap:10px;color:var(--text-3);
+    }
+    .no-data-placeholder svg{width:40px;height:40px;opacity:.4}
+    .no-data-placeholder p{font-size:14px;font-weight:500}
+
+    .top-list{list-style:none}
+    .top-item{
+      display:flex;align-items:center;
+      padding:11px 0;
+      border-bottom:1px solid var(--border);
+    }
+    .top-item:last-child{border-bottom:none}
+    .top-rank{
+      width:26px;height:26px;
+      background:var(--surface-2);
+      border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:700;color:var(--text-2);
+      margin-left:11px;flex-shrink:0;
+    }
+    .top-name{flex:1;font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .top-val{font-size:12px;font-weight:700;color:var(--red);background:var(--red-badge);padding:2px 8px;border-radius:6px;white-space:nowrap}
+
+    /* ── COLUMNS ── */
+    .cols{display:flex;gap:14px;padding:0 22px}
+    @media(max-width:767px){.cols{padding:0 14px}}
+
+    .col{flex:1;min-width:0}
+
+    .col-hd{
+      display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:12px;padding:0 2px;
+    }
+    .col-title{
+      display:flex;align-items:center;gap:7px;
+      font-size:12px;font-weight:600;
+      color:var(--text-2);
+      text-transform:uppercase;letter-spacing:.06em;
+    }
+    .dot{width:7px;height:7px;border-radius:50%}
+    .dot.g{background:var(--green-text)}
+    .dot.r{background:var(--red-text)}
+
+    .col-right{display:flex;align-items:center;gap:9px}
+    .col-n{font-size:21px;font-weight:700}
+    .col-n.g{color:var(--green-text)}
+    .col-n.r{color:var(--red-text)}
+
+    .rst-btn{
+      height:30px;padding:0 11px;
+      border-radius:7px;
+      border:1px solid var(--border-med);
+      background:var(--surface);
+      font-family:var(--font);font-size:12px;font-weight:600;
+      color:var(--text-2);cursor:pointer;
+      transition:border-color .14s,color .14s;
+    }
+    .rst-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+    /* ── STUDENT CARDS ── */
+    .s-list{display:flex;flex-direction:column;gap:8px}
+
+    .s-card{
+      display:flex;align-items:center;gap:13px;
+      padding:13px 14px;
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:var(--r-md);
+      cursor:pointer;
+      box-shadow:var(--shadow-sm);
+      user-select:none;
+      animation:fadeUp .17s ease-out both;
+      transition:border-color .15s,background .15s,box-shadow .15s,transform .12s;
+    }
+    @keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+    .s-card:active{transform:scale(.98)}
+    .s-card.hg:hover{border-color:var(--green-border);background:var(--green-bg)}
+    .s-card.hr:hover{border-color:var(--red-border);background:var(--red-bg)}
+
+    .av{
+      width:42px;height:42px;border-radius:10px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:14px;font-weight:700;flex-shrink:0;letter-spacing:.2px;
+    }
+    .av.g{background:var(--green-badge);color:var(--green-text)}
+    .av.r{background:var(--red-badge);color:var(--red-text)}
+
+    .card-body{flex:1;min-width:0}
+    .card-name{
+      font-size:15px;font-weight:600;color:var(--text-1);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .card-sec{font-size:12px;font-weight:500;color:var(--text-3);margin-top:2px}
+
+    .card-act{
+      width:32px;height:32px;border-radius:8px;
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      transition:transform .14s;
+    }
+    .card-act svg{width:14px;height:14px}
+    .card-act.g{background:var(--green-badge);color:var(--green-text)}
+    .card-act.r{background:var(--red-badge);color:var(--red-text)}
+
+    .s-card:hover .card-act{transform:translateX(3px)}
+
+    /* ── EMPTY ── */
+    .empty{
+      display:flex;flex-direction:column;align-items:center;
+      padding:48px 20px;gap:9px;
+    }
+    .empty-ico{
+      width:50px;height:50px;border-radius:50%;
+      background:var(--surface-2);border:1px solid var(--border-med);
+      display:flex;align-items:center;justify-content:center;margin-bottom:4px;
+    }
+    .empty-ico svg{width:22px;height:22px;color:var(--text-3)}
+    .empty-t{font-size:15px;font-weight:600;color:var(--text-2)}
+    .empty-s{font-size:13px;color:var(--text-3)}
+
+    /* ── LOADING ── */
+    #loading{
+      display:flex;flex-direction:column;align-items:center;
+      justify-content:center;min-height:280px;gap:16px;
+    }
+    .spin{
+      width:32px;height:32px;
+      border:2.5px solid var(--border-med);
+      border-top-color:var(--accent);
+      border-radius:50%;
+      animation:rot .7s linear infinite;
+    }
+    @keyframes rot{to{transform:rotate(360deg)}}
+    .load-t{font-size:14px;font-weight:500;color:var(--text-2)}
+
+    /* ── SAVE BAR ── */
+    .save-bar{
+      position:fixed;bottom:0;left:0;right:0;
+      padding:12px 22px 24px;
+      background:linear-gradient(to top,var(--bg) 60%,transparent);
+      pointer-events:none;z-index:200;
+    }
+    .save-inner{
+      max-width:480px;margin:0 auto;
+      pointer-events:all;
+      transform:translateY(80px);opacity:0;
+      transition:transform .3s cubic-bezier(.34,1.4,.64,1),opacity .22s;
+    }
+    .save-inner.vis{transform:none;opacity:1}
+
+    .save-btn{
+      display:flex;align-items:center;justify-content:center;gap:10px;
+      width:100%;height:54px;
+      background:var(--accent);color:#fff;
+      border:none;border-radius:var(--r-lg);
+      font-family:var(--font);font-size:15px;font-weight:700;
+      cursor:pointer;
+      box-shadow:0 6px 18px rgba(229,62,62,.36);
+      transition:background .14s,box-shadow .14s,transform .12s;
+    }
+    .save-btn svg{width:18px;height:18px}
+    .save-btn:hover{background:var(--accent-dark);box-shadow:0 8px 24px rgba(229,62,62,.44)}
+    .save-btn:active{transform:scale(.98)}
+    .save-btn:disabled{opacity:.72;cursor:not-allowed}
+
+    #statusMsg{
+      text-align:center;font-size:13px;font-weight:600;
+      padding:8px 14px;border-radius:var(--r-sm);
+      margin-top:8px;display:none;
+    }
+    #statusMsg.ok{background:var(--green-badge);color:var(--green-text)}
+    #statusMsg.er{background:var(--red-badge);color:var(--red-text)}
+
+    .dim{opacity:.38;pointer-events:none;transition:opacity .3s}
+    .gone{display:none!important}
+    @media(max-width:767px){.mob-hide{display:none}}
+
+    /* ── RECORDING STATUS BANNER ── */
+    .rec-banner{
+      margin:0 22px 12px;
+      padding:12px 15px;
+      background:rgba(245,158,11,.08);
+      border:1px solid rgba(245,158,11,.28);
+      border-radius:var(--r-sm);
+      display:flex;align-items:center;gap:10px;
+      font-size:13px;font-weight:500;
+      color:#92400e;
+      animation:fadeIn .3s ease-out;
+    }
+    [data-theme="dark"] .rec-banner{
+      background:rgba(245,158,11,.1);
+      border-color:rgba(245,158,11,.22);
+      color:#fbbf24;
+    }
+    .rec-banner svg{width:16px;height:16px;flex-shrink:0}
+    @media(max-width:640px){.rec-banner{margin:0 14px 12px}}
+
+    /* ══════════════════════════════════════
+       ONBOARDING GUIDE MODAL
+       ══════════════════════════════════════ */
+    .guide-overlay{
+      position:fixed;inset:0;z-index:999;
+      background:rgba(0,0,0,.55);
+      backdrop-filter:blur(4px);
+      display:flex;align-items:center;justify-content:center;
+      padding:16px;
+      opacity:0;
+      animation:guideIn .35s ease-out forwards;
+    }
+    @keyframes guideIn{to{opacity:1}}
+    .guide-overlay.closing{animation:guideOut .25s ease-in forwards}
+    @keyframes guideOut{to{opacity:0}}
+
+    .guide-modal{
+      background:var(--surface);
+      border-radius:var(--r-lg);
+      box-shadow:0 20px 60px rgba(0,0,0,.2);
+      max-width:480px;width:100%;
+      max-height:90vh;overflow-y:auto;
+      padding:28px 28px 24px;
+      position:relative;
+      transform:translateY(20px);
+      animation:modalUp .35s ease-out forwards;
+    }
+    @keyframes modalUp{to{transform:translateY(0)}}
+
+    .guide-badge{
+      display:inline-flex;align-items:center;gap:7px;
+      background:var(--accent-alpha);
+      color:var(--accent);
+      font-size:11px;font-weight:700;letter-spacing:.07em;
+      padding:4px 11px;border-radius:20px;
+      margin-bottom:14px;
+      text-transform:uppercase;
+    }
+    .guide-badge svg{width:11px;height:11px}
+
+    .guide-title{
+      font-size:20px;font-weight:700;
+      color:var(--text-1);margin-bottom:6px;
+    }
+    .guide-sub{
+      font-size:13px;color:var(--text-2);
+      margin-bottom:22px;line-height:1.6;
+    }
+
+    .guide-steps{display:flex;flex-direction:column;gap:14px;margin-bottom:24px}
+
+    .guide-step{
+      display:flex;gap:14px;
+      padding:14px 15px;
+      background:var(--surface-2);
+      border:1px solid var(--border);
+      border-radius:var(--r-md);
+      transition:border-color .18s;
+    }
+    .guide-step:hover{border-color:var(--accent)}
+
+    .guide-step-num{
+      width:32px;height:32px;
+      background:var(--accent);
+      color:#fff;
+      border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:700;
+      flex-shrink:0;margin-top:1px;
+    }
+
+    .guide-step-body{}
+    .guide-step-title{
+      font-size:14px;font-weight:700;
+      color:var(--text-1);margin-bottom:4px;
+    }
+    .guide-step-desc{
+      font-size:13px;color:var(--text-2);
+      line-height:1.55;
+    }
+    .guide-step-desc b{color:var(--text-1);font-weight:600}
+
+    .guide-tip{
+      display:flex;gap:10px;align-items:flex-start;
+      padding:12px 14px;
+      background:rgba(59,130,246,.07);
+      border:1px solid rgba(59,130,246,.18);
+      border-radius:var(--r-sm);
+      margin-bottom:22px;
+    }
+    .guide-tip svg{width:15px;height:15px;color:#3b82f6;flex-shrink:0;margin-top:1px}
+    .guide-tip p{font-size:12px;color:#3b82f6;font-weight:500;line-height:1.55}
+
+    .guide-close-btn{
+      width:100%;height:48px;
+      background:var(--accent);color:#fff;
+      border:none;border-radius:var(--r-md);
+      font-family:var(--font);font-size:15px;font-weight:700;
+      cursor:pointer;
+      box-shadow:0 4px 14px rgba(229,62,62,.3);
+      transition:background .14s,box-shadow .14s,transform .12s;
+      display:flex;align-items:center;justify-content:center;gap:8px;
+    }
+    .guide-close-btn:hover{background:var(--accent-dark)}
+    .guide-close-btn:active{transform:scale(.98)}
+    .guide-close-btn svg{width:16px;height:16px}
+
+    /* Help button in header */
+    .help-btn{
+      width:40px;height:40px;
+      border-radius:var(--r-sm);
+      border:1px solid var(--border-med);
+      background:var(--surface-2);
+      color:var(--text-2);
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;flex-shrink:0;
+      font-size:16px;font-weight:700;
+      transition:background .18s,color .18s,border-color .18s;
+    }
+    .help-btn:hover{background:var(--accent-alpha);border-color:var(--accent);color:var(--accent)}
+
+    /* ══════════════════════════════════════
+       UNDO BUTTON
+       ══════════════════════════════════════ */
+    .undo-btn{
+      height:42px;padding:0 13px;
+      border-radius:var(--r-sm);
+      border:1px solid var(--border-med);
+      background:var(--surface);
+      color:var(--text-2);
+      font-family:var(--font);font-size:13px;font-weight:600;
+      cursor:pointer;
+      display:flex;align-items:center;gap:6px;
+      transition:all .18s;
+      white-space:nowrap;
+      animation:undoPop .25s cubic-bezier(.34,1.4,.64,1);
+    }
+    @keyframes undoPop{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+    .undo-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-alpha)}
+    .undo-btn:active{transform:scale(.96)}
+    .undo-btn svg{width:14px;height:14px}
+    @media(max-width:520px){
+      .undo-btn .undo-lbl{display:none}
+      .undo-btn{padding:0 11px;width:42px;justify-content:center}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════
+       HEADER
+       ══════════════════════════════════════ -->
+  <header class="hdr">
+    <div class="hdr-row">
+      <!-- Logo -->
+      <div class="logo">
+        <div class="logo-mark">ج</div>
+        <span class="logo-name">جسور</span>
       </div>
-    );
-  }
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard students={students} />;
-      case 'student-att': return <StudentAttendance students={students} showToast={showToast} />;
-      case 'teacher-att': return <TeacherAttendance teachers={teachers} showToast={showToast} />;
-      case 'grades': return <GradesManager students={students} grades={grades} setGrades={setGrades} showToast={showToast} />;
-      case 'database': return <DatabaseView students={students} teachers={teachers} />;
-      default: return <Dashboard students={students} />;
-    }
-  };
+      <!-- Controls (wrap on mobile) -->
+      <div class="hdr-right">
 
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row" dir="rtl">
-      <aside className="w-full md:w-64 bg-white shadow-lg print:hidden flex flex-col">
-        <div className="p-6 border-b text-center">
-          <h1 className="text-3xl font-extrabold text-blue-600">جُسور</h1>
-          <span className="text-xs text-emerald-500 font-bold flex items-center justify-center gap-1">
-             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> متصل بالقاعدة
+        <!-- Dashboard toggle -->
+        <button id="toggleDashBtn" class="dash-btn" onclick="toggleDashboard()">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-4 4 4 5-8"/></svg>
+          <span class="mob-hide">لوحة التحكم</span>
+        </button>
+
+        <!-- Section filter -->
+        <div class="sel-wrap" id="secFilterWrap">
+          <select id="sectionFilter" class="ctrl" onchange="filterAndRender()">
+            <option value="ALL">جميع الشعب</option>
+          </select>
+          <span class="sel-arrow">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
           </span>
         </div>
-        <nav className="flex-1 p-4 space-y-2">
-          <NavItem icon={<LayoutDashboard />} label="لوحة القيادة" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <NavItem icon={<Users />} label="حضور الطلاب" active={activeTab === 'student-att'} onClick={() => setActiveTab('student-att')} />
-          <NavItem icon={<Users className="text-purple-500" />} label="حضور المعلمين" active={activeTab === 'teacher-att'} onClick={() => setActiveTab('teacher-att')} />
-          <NavItem icon={<GraduationCap />} label="إدارة العلامات" active={activeTab === 'grades'} onClick={() => setActiveTab('grades')} />
-          <NavItem icon={<Database />} label="قاعدة البيانات" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
-        </nav>
-        <div className="p-4 border-t">
-          <button onClick={handleLogout} className="flex items-center gap-3 w-full p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-            <LogOut size={20} />
-            <span className="font-medium">تسجيل الخروج وقطع الاتصال</span>
-          </button>
+
+        <!-- Date picker with "today" badge -->
+        <div class="date-wrap" id="dateWrap">
+          <span class="today-badge">اليوم</span>
+          <input type="date" id="datePicker" class="ctrl" onchange="handleDateChange()">
         </div>
-      </aside>
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto">
-        {renderContent()}
-      </main>
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-    </div>
-  );
-}
 
-const NavItem = ({ icon, label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
-      active ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-    }`}
-  >
-    {React.cloneElement(icon, { size: 20, className: active ? 'text-blue-600' : '' })}
-    <span>{label}</span>
-  </button>
-);
+        <!-- Go to today shortcut -->
+        <button class="today-btn mob-hide" onclick="goToToday()" title="انتقل إلى اليوم">
+          اليوم ←
+        </button>
 
-// --- 1. لوحة القيادة (Dashboard) ---
-const Dashboard = ({ students }) => {
-  const [filterSection, setFilterSection] = useState('All');
+        <!-- Theme toggle -->
+        <button class="theme-btn" onclick="toggleTheme()" title="تبديل الوضع">
+          <svg id="ico-moon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
+          <svg id="ico-sun" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
 
-  const filteredStudents = useMemo(() => {
-    if (filterSection === 'All') return students;
-    return students.filter(s => s.section === filterSection);
-  }, [students, filterSection]);
-
-  const stats = useMemo(() => {
-    const active = filteredStudents.filter(s => s.status === 'Active').length;
-    const dropouts = filteredStudents.filter(s => s.status === 'Dropout').length;
-    const warning = filteredStudents.filter(s => s.status === 'Active' && s.absences >= 3).length;
-    return { active, dropouts, warning, total: filteredStudents.length };
-  }, [filteredStudents]);
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center print:hidden">
-        <h2 className="text-2xl font-bold text-gray-800">نظرة عامة على المركز</h2>
-        <div className="flex gap-4">
-          <select 
-            className="border-gray-300 rounded-lg p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            value={filterSection}
-            onChange={(e) => setFilterSection(e.target.value)}
-          >
-            <option value="All">جميع الشعب</option>
-            <option value="A">شعبة A</option>
-            <option value="B">شعبة B</option>
-          </select>
-          <button 
-            onClick={() => window.print()}
-            className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2"
-          >
-            <Printer size={18} /> طباعة التقرير
-          </button>
-        </div>
-      </div>
-      <div className="hidden print:block text-center mb-8 border-b pb-4">
-        <h1 className="text-3xl font-bold">تقرير مركز جسور التعليمي</h1>
-        <p className="text-gray-500 mt-2">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
-        <p className="text-gray-500">الشعبة: {filterSection === 'All' ? 'الكل' : filterSection}</p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="الطلاب النشطين" value={stats.active} icon={<Users />} color="bg-blue-500" />
-        <StatCard title="الطلاب المتسربين" value={stats.dropouts} icon={<Settings />} color="bg-gray-500" />
-        <StatCard title="تجاوزوا حد الغياب (3+)" value={stats.warning} icon={<AlertCircle />} color="bg-red-500" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold mb-4 text-gray-700">معدل الحضور العام (اليوم)</h3>
-          <div className="h-64 flex items-center justify-center">
-            <PieChart present={85} absent={10} late={5} />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold mb-4 text-red-600 flex items-center gap-2">
-            <AlertCircle size={20} /> الطلاب الأكثر غياباً
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="p-3">الاسم</th>
-                  <th className="p-3">الشعبة</th>
-                  <th className="p-3">عدد الغيابات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents
-                  .filter(s => s.absences > 0 && s.status === 'Active')
-                  .sort((a, b) => b.absences - a.absences)
-                  .slice(0, 5)
-                  .map(s => (
-                  <tr key={s.id} className="border-t border-gray-50">
-                    <td className="p-3 font-medium">{s.name}</td>
-                    <td className="p-3">{s.section}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded-full text-xs ${s.absences >= 3 ? 'bg-red-100 text-red-700 font-bold' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {s.absences} أيام
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <!-- Help / Guide button -->
+        <button class="help-btn" onclick="openGuide()" title="دليل الاستخدام">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
       </div>
     </div>
-  );
-};
+  </header>
 
-const StatCard = ({ title, value, icon, color }) => (
-  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex items-center gap-4">
-    <div className={`${color} text-white p-4 rounded-lg`}>
-      {React.cloneElement(icon, { size: 28 })}
+  <!-- ══════════════════════════════════════
+       SUMMARY STATS
+       ══════════════════════════════════════ -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-ico g">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <div>
+        <div class="stat-num g" id="stat-p">0</div>
+        <div class="stat-lbl">حاضر</div>
+      </div>
+      <span class="pct g" id="pct-p">—</span>
     </div>
-    <div>
-      <p className="text-sm text-gray-500 font-medium">{title}</p>
-      <p className="text-3xl font-bold text-gray-800">{value}</p>
+
+    <div class="stat">
+      <div class="stat-ico r">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </div>
+      <div>
+        <div class="stat-num r" id="stat-a">0</div>
+        <div class="stat-lbl">غائب</div>
+      </div>
+      <span class="pct r" id="pct-a">—</span>
+    </div>
+
+    <div class="stat mob-hide">
+      <div class="stat-ico b">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div>
+        <div class="stat-num" id="stat-total" style="color:var(--text-1)">0</div>
+        <div class="stat-lbl">إجمالي الطلاب</div>
+      </div>
     </div>
   </div>
-);
 
-// --- 2. تسجيل حضور الطلاب ---
-const StudentAttendance = ({ students, showToast }) => {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [section, setSection] = useState('A');
-  const [isSaving, setIsSaving] = useState(false);
-  const [attendanceState, setAttendanceState] = useState({});
+  <!-- Loading spinner -->
+  <div id="loading"><div class="spin"></div><span class="load-t">جاري تحميل البيانات…</span></div>
 
-  useEffect(() => {
-    const sectionStudents = students.filter(s => s.section === section && s.status === 'Active');
-    const initialState = {};
-    sectionStudents.forEach(s => { initialState[s.id] = 'P'; });
-    setAttendanceState(initialState);
-  }, [section, students, date]);
+  <!-- ══════════════════════════════════════
+       ATTENDANCE UI
+       ══════════════════════════════════════ -->
+  <div id="attendanceUI" class="gone">
 
-  const handleStatusChange = (id, newStatus) => {
-    setAttendanceState(prev => ({ ...prev, [id]: newStatus }));
+    <!-- بانر تحذيري: يظهر فقط حين لم يُحفظ حضور هذا اليوم بعد -->
+    <div id="recBanner" class="rec-banner gone">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>لم يُسجَّل حضور هذا اليوم بعد — حدِّد الغائبين ثم اضغط حفظ</span>
+    </div>
+
+    <div class="toolbar">
+      <!-- Search -->
+      <div class="srch-wrap">
+        <span class="srch-ico">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </span>
+        <input class="srch" id="srch" type="text" placeholder="ابحث عن طالب…" oninput="filterAndRender()">
+      </div>
+
+      <!-- ✅ تحديد الكل / إلغاء تحديد الكل -->
+      <div class="qa-wrap">
+        <button class="qa-btn qa-g" onclick="setAllPresent()" title="تحديد الجميع حاضرين">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+          <span class="qa-lbl">الكل حاضر</span>
+        </button>
+        <button class="qa-btn qa-r" onclick="setAllAbsent()" title="تحديد الجميع غائبين">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          <span class="qa-lbl">الكل غائب</span>
+        </button>
+        <!-- زر التراجع -->
+        <button id="undoBtn" class="undo-btn gone" onclick="undoLast()" title="تراجع عن آخر عملية">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 0 8h-1"/></svg>
+          <span class="undo-lbl">تراجع</span>
+        </button>
+      </div>
+
+      <!-- Mobile tabs -->
+      <div class="tabs" id="tabs">
+        <button class="tab ag" id="tab-p" onclick="switchTab('present')">حضور (<span id="tp-n">0</span>)</button>
+        <button class="tab"    id="tab-a" onclick="switchTab('absent')">غياب (<span id="ta-n">0</span>)</button>
+      </div>
+    </div>
+
+    <!-- Two-column student lists -->
+    <div class="cols">
+      <div class="col" id="col-p">
+        <div class="col-hd">
+          <div class="col-title"><span class="dot g"></span>الحاضرون</div>
+          <span class="col-n g" id="pc-n">0</span>
+        </div>
+        <div class="s-list" id="presentList"></div>
+      </div>
+
+      <div class="col" id="col-a">
+        <div class="col-hd">
+          <div class="col-title"><span class="dot r"></span>الغائبون</div>
+          <div class="col-right">
+            <button class="rst-btn" onclick="setAllPresent()">تصفير</button>
+            <span class="col-n r" id="ac-n">0</span>
+          </div>
+        </div>
+        <div class="s-list" id="absentList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       DASHBOARD UI
+       ══════════════════════════════════════ -->
+  <div id="dashboardUI" class="gone">
+
+    <!-- Meta info bar: date range + overall rate -->
+    <div class="dash-meta" id="dashMeta">
+      <div class="dash-meta-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>الفترة: </span>
+        <span class="dash-meta-val" id="metaRange">جاري التحميل…</span>
+      </div>
+      <div class="dash-meta-divider"></div>
+      <div class="dash-meta-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>أيام مسجلة: </span>
+        <span class="dash-meta-val" id="metaDays">—</span>
+      </div>
+      <div class="dash-meta-divider"></div>
+      <div class="dash-meta-item">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>متوسط الحضور: </span>
+        <span class="dash-meta-val" id="metaRate">—</span>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <!-- Attendance Trend Chart -->
+      <div class="dash-card">
+        <div class="dash-card-title">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+          تطور نسبة الحضور (آخر 7 أيام نشطة)
+        </div>
+        <div class="chart-container" id="trendContainer">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Section Comparison -->
+      <div class="dash-card">
+        <div class="dash-card-title">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          مقارنة الانضباط حسب الشعبة
+        </div>
+        <div class="chart-container" id="sectionContainer">
+          <canvas id="sectionChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Weekly Distribution -->
+      <div class="dash-card">
+        <div class="dash-card-title">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          تحليل الحضور حسب أيام الأسبوع
+        </div>
+        <div class="chart-container" id="weeklyContainer">
+          <canvas id="weeklyChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Top Absent Students -->
+      <div class="dash-card">
+        <div class="dash-card-title">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          الطلاب الأكثر غياباً (منذ 15 أبريل)
+        </div>
+        <ul class="top-list" id="topAbsentList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save bar -->
+  <div class="save-bar">
+    <div class="save-inner" id="saveInner">
+      <button class="save-btn" id="saveBtn" onclick="submitAttendance()">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        حفظ ومزامنة السجل
+      </button>
+      <div id="statusMsg"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       ONBOARDING GUIDE MODAL
+       ══════════════════════════════════════ -->
+  <div id="guideOverlay" class="guide-overlay gone" onclick="handleOverlayClick(event)">
+    <div class="guide-modal" id="guideModal">
+
+      <div class="guide-badge">
+        <svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        دليل الاستخدام
+      </div>
+
+      <div class="guide-title">مرحباً بك في جسور 👋</div>
+      <div class="guide-sub">دليل سريع لتسجيل الحضور بشكل صحيح خلال دقيقة واحدة</div>
+
+      <div class="guide-steps">
+
+        <div class="guide-step">
+          <div class="guide-step-num">1</div>
+          <div class="guide-step-body">
+            <div class="guide-step-title">اختر التاريخ</div>
+            <div class="guide-step-desc">من حقل التاريخ في أعلى الصفحة اختر اليوم الذي تريد تسجيل حضوره. افتراضياً يكون <b>تاريخ اليوم</b> محدداً تلقائياً.</div>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">2</div>
+          <div class="guide-step-body">
+            <div class="guide-step-title">جميع الطلاب حاضرون افتراضياً</div>
+            <div class="guide-step-desc">عند فتح التطبيق ستجد كل الطلاب في عمود <b>الحاضرون</b>. مهمتك فقط <b>نقل الغائبين</b> إلى العمود الآخر.</div>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">3</div>
+          <div class="guide-step-body">
+            <div class="guide-step-title">انقر على الطالب لنقله</div>
+            <div class="guide-step-desc">اضغط على بطاقة أي طالب لنقله: من <b style="color:var(--green-text)">الحاضرين → الغائبين</b>، أو العكس. يمكنك أيضاً استخدام زرَّي <b>الكل حاضر / الكل غائب</b> للتسريع.</div>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">4</div>
+          <div class="guide-step-body">
+            <div class="guide-step-title">اضغط "حفظ ومزامنة السجل"</div>
+            <div class="guide-step-desc">بعد الانتهاء من التعديلات سيظهر زر الحفظ في أسفل الشاشة. اضغطه <b>لحفظ البيانات في السحابة</b> بشكل دائم.</div>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-num">5</div>
+          <div class="guide-step-body">
+            <div class="guide-step-title">زر التراجع لإصلاح الأخطاء</div>
+            <div class="guide-step-desc">إذا أخطأت في نقل طالب، اضغط زر <b>تراجع</b> (↩) في شريط الأدوات للعودة إلى الحالة السابقة قبل الحفظ.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="guide-tip">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <p>يمكنك إعادة فتح هذا الدليل في أي وقت بالضغط على أيقونة <b>؟</b> في أعلى يسار الشاشة.</p>
+      </div>
+
+      <button class="guide-close-btn" onclick="closeGuide()">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        فهمت، لنبدأ!
+      </button>
+
+    </div>
+  </div>
+
+<script>
+  /* ════════════════════════════════════
+     STATE
+     ════════════════════════════════════ */
+  let all=[], present=[], absent=[], origMap={}, activeTab='present', viewMode='attendance';
+  let charts = {};
+
+  /* ════════════════════════════════════
+     THEME
+     ════════════════════════════════════ */
+  function applyTheme(dark){
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    document.getElementById('ico-moon').style.display = dark ? 'none' : '';
+    document.getElementById('ico-sun').style.display  = dark ? '' : 'none';
+    if(charts.trend) updateChartsTheme();
+  }
+  function toggleTheme(){
+    const d = document.documentElement.getAttribute('data-theme') === 'dark';
+    localStorage.setItem('theme', d ? 'light' : 'dark');
+    applyTheme(!d);
+  }
+  (()=>{
+    const s = localStorage.getItem('theme');
+    applyTheme(s ? s==='dark' : window.matchMedia('(prefers-color-scheme:dark)').matches);
+  })();
+
+  /* ════════════════════════════════════
+     DATE HELPERS – smart "today" detection
+     ════════════════════════════════════ */
+  function getTodayStr(){
+    // Use local date string (YYYY-MM-DD) to match input[type=date] value
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function updateTodayIndicator(){
+    const today  = getTodayStr();
+    const picked = document.getElementById('datePicker').value;
+    const wrap   = document.getElementById('dateWrap');
+    if(picked === today){
+      wrap.classList.add('is-today');
+    } else {
+      wrap.classList.remove('is-today');
+    }
+  }
+
+  function goToToday(){
+    document.getElementById('datePicker').value = getTodayStr();
+    handleDateChange();
+  }
+
+  /* ════════════════════════════════════
+     INIT
+     ════════════════════════════════════ */
+  window.onload = () => {
+    const today = getTodayStr();
+    document.getElementById('datePicker').value = today;
+    updateTodayIndicator();
+
+    google.script.run
+      .withSuccessHandler(data => {
+        all = data.students;
+        document.getElementById('stat-total').textContent = all.length;
+        origMap = data.initialAttendance || {};
+        populateSections(data.sections);
+        applyMap(origMap);
+        // ← إظهار البانر إذا اليوم لم يُسجَّل بعد
+        showRecordingBanner(!data.isTodayRecorded);
+        document.getElementById('loading').classList.add('gone');
+        document.getElementById('attendanceUI').classList.remove('gone');
+      })
+      .withFailureHandler(e => showMsg(e.message, false))
+      .getInitialData();
   };
 
-  const activeStudents = students.filter(s => s.section === section && s.status === 'Active');
-  const presentStudents = activeStudents.filter(s => attendanceState[s.id] === 'P');
-  const otherStudents = activeStudents.filter(s => attendanceState[s.id] !== 'P');
+  function populateSections(secs){
+    const sel = document.getElementById('sectionFilter');
+    secs.forEach(s => {
+      if(!s) return;
+      const o = document.createElement('option');
+      o.value = s; o.textContent = 'شعبة ' + s;
+      sel.appendChild(o);
+    });
+  }
 
-  // --- تحديث: الإرسال بتخطي CORS ---
-  const handleSave = async () => {
-    setIsSaving(true);
-    const scriptUrl = localStorage.getItem('jusoor_sheet_url');
+  function applyMap(map){
+    present = []; absent = [];
+    all.forEach(s => (map[s.id] === false ? absent : present).push(s));
+    filterAndRender();
+  }
 
-    try {
-      const response = await fetch(scriptUrl, {
-        method: 'POST',
-        headers: {
-           // هذا الهيدر يمنع المتصفح من إرسال طلب OPTIONS (Preflight) المزعج
-          'Content-Type': 'text/plain;charset=utf-8', 
+  function handleDateChange(){
+    updateTodayIndicator();
+    if(viewMode === 'dashboard'){
+      loadDashboard();
+    } else {
+      loadAttendanceForDate();
+    }
+  }
+
+  function loadAttendanceForDate(){
+    const d = document.getElementById('datePicker').value;
+    document.getElementById('attendanceUI').classList.add('dim');
+    google.script.run
+      .withSuccessHandler(result => {
+        // result = { attendance: {…}, isRecorded: bool }
+        origMap = result.attendance;
+        applyMap(result.attendance);
+        showRecordingBanner(!result.isRecorded); // ← بانر تحذيري للأيام غير المسجَّلة
+        document.getElementById('attendanceUI').classList.remove('dim');
+      })
+      .getAttendanceForDate(d);
+  }
+
+  /* إظهار/إخفاء بانر "لم يُسجَّل هذا اليوم بعد" */
+  function showRecordingBanner(show){
+    document.getElementById('recBanner').classList.toggle('gone', !show);
+  }
+
+  /* ════════════════════════════════════
+     QUICK-ACTION: تحديد الكل / إلغاء تحديد الكل
+     ════════════════════════════════════ */
+  function setAllPresent(){
+    // تصفير – جميع الطلاب حاضرون
+    const sec = document.getElementById('sectionFilter').value;
+    if(sec === 'ALL'){
+      present = [...all]; absent = [];
+    } else {
+      // only affect current section filter
+      const moved = absent.filter(s => s.section === sec);
+      moved.forEach(s => {
+        absent.splice(absent.indexOf(s), 1);
+        present.unshift(s);
+      });
+    }
+    filterAndRender();
+  }
+
+  function setAllAbsent(){
+    // جميع الطلاب غائبون (مع مراعاة الفلتر)
+    const sec = document.getElementById('sectionFilter').value;
+    if(sec === 'ALL'){
+      absent = [...all]; present = [];
+    } else {
+      const moved = present.filter(s => s.section === sec);
+      moved.forEach(s => {
+        present.splice(present.indexOf(s), 1);
+        absent.unshift(s);
+      });
+    }
+    filterAndRender();
+  }
+
+  /* ════════════════════════════════════
+     DASHBOARD – يستدعي الـ backend الحقيقي
+     ════════════════════════════════════ */
+  function toggleDashboard(){
+    const btn = document.getElementById('toggleDashBtn');
+    if(viewMode === 'attendance'){
+      viewMode = 'dashboard';
+      btn.classList.add('active');
+      btn.innerHTML = `<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><span class="mob-hide">تسجيل الحضور</span>`;
+      document.getElementById('attendanceUI').classList.add('gone');
+      document.getElementById('secFilterWrap').classList.add('gone');
+      document.getElementById('dashboardUI').classList.remove('gone');
+      document.getElementById('saveInner').classList.remove('vis');
+      loadDashboard();
+    } else {
+      viewMode = 'attendance';
+      btn.classList.remove('active');
+      btn.innerHTML = `<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-4 4 4 5-8"/></svg><span class="mob-hide">لوحة التحكم</span>`;
+      document.getElementById('dashboardUI').classList.add('gone');
+      document.getElementById('secFilterWrap').classList.remove('gone');
+      document.getElementById('attendanceUI').classList.remove('gone');
+      filterAndRender();
+    }
+  }
+
+  function loadDashboard(){
+    const dash = document.getElementById('dashboardUI');
+    dash.classList.add('dim');
+
+    // ── استدعاء الدالة الحقيقية من الـ backend ──
+    google.script.run
+      .withSuccessHandler(data => {
+        renderDashboardMeta(data.meta);
+        if(data.meta && data.meta.noData){
+          showNoDashboardData();
+        } else {
+          renderCharts(data);
+        }
+        dash.classList.remove('dim');
+      })
+      .withFailureHandler(e => {
+        showMsg('خطأ في تحميل لوحة التحكم: ' + e.message, false);
+        dash.classList.remove('dim');
+      })
+      .getDashboardData();
+  }
+
+  /* ── تحديث شريط المعلومات في الداشبورد ── */
+  function renderDashboardMeta(meta){
+    if(!meta) return;
+    document.getElementById('metaRange').textContent =
+      meta.noData ? 'لا توجد بيانات بعد' : (meta.startDate + ' → ' + meta.endDate);
+    document.getElementById('metaDays').textContent =
+      meta.activeDays > 0 ? meta.activeDays + ' يوم' : '—';
+    document.getElementById('metaRate').textContent =
+      meta.overallRate > 0 ? meta.overallRate + '%' : '—';
+  }
+
+  function showNoDashboardData(){
+    ['trendContainer','sectionContainer','weeklyContainer'].forEach(id => {
+      document.getElementById(id).innerHTML = `
+        <div class="no-data-placeholder">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p>لا توجد بيانات بعد 15 أبريل</p>
+        </div>`;
+    });
+    document.getElementById('topAbsentList').innerHTML = `
+      <li style="padding:20px;text-align:center;color:var(--text-3);font-size:14px">لا توجد سجلات غياب بعد</li>`;
+  }
+
+  /* ════════════════════════════════════
+     CHART RENDERING
+     ════════════════════════════════════ */
+  function renderCharts(data){
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#e6edf3' : '#111827';
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+    // 1. Trend Chart
+    const trendContainer = document.getElementById('trendContainer');
+    trendContainer.innerHTML = '<canvas id="trendChart"></canvas>';
+    if(charts.trend) charts.trend.destroy();
+    if(data.trend.labels.length === 0){
+      trendContainer.innerHTML = `<div class="no-data-placeholder"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>لا توجد بيانات للرسم</p></div>`;
+    } else {
+      charts.trend = new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: {
+          labels: data.trend.labels,
+          datasets: [{
+            label: 'نسبة الحضور %',
+            data: data.trend.values,
+            borderColor: '#e53e3e',
+            backgroundColor: 'rgba(229,62,62,0.1)',
+            fill: true, tension: 0.4, pointRadius: 4
+          }]
         },
-        redirect: 'follow', // لتتبع إعادة التوجيه من جوجل
-        body: JSON.stringify({
-          action: 'saveStudentAttendance',
-          date: date,
-          section: section,
-          attendance: attendanceState
-        })
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0, max: 100, ticks: { color: textColor }, grid: { color: gridColor } },
+            x: { ticks: { color: textColor }, grid: { display: false } }
+          }
+        }
       });
-      
-      const result = await response.json();
-      
-      if(result.status === 'success') {
-        showToast('تم حفظ التفقد بنجاح ومزامنته مع Google Sheets');
-      } else {
-        showToast('حدث خطأ أثناء الحفظ: ' + result.message, 'error');
+    }
+
+    // 2. Section Chart
+    const sectionContainer = document.getElementById('sectionContainer');
+    sectionContainer.innerHTML = '<canvas id="sectionChart"></canvas>';
+    if(charts.section) charts.section.destroy();
+    if(data.sections.length === 0){
+      sectionContainer.innerHTML = `<div class="no-data-placeholder"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>لا توجد بيانات للشعب</p></div>`;
+    } else {
+      charts.section = new Chart(document.getElementById('sectionChart'), {
+        type: 'bar',
+        data: {
+          labels: data.sections.map(s => s.name),
+          datasets: [{
+            data: data.sections.map(s => s.rate),
+            backgroundColor: data.sections.map(s => s.rate > 85 ? '#16a34a' : '#e53e3e'),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0, max: 100, ticks: { color: textColor }, grid: { color: gridColor } },
+            x: { ticks: { color: textColor }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    // 3. Weekly Distribution
+    const weeklyContainer = document.getElementById('weeklyContainer');
+    weeklyContainer.innerHTML = '<canvas id="weeklyChart"></canvas>';
+    if(charts.weekly) charts.weekly.destroy();
+    charts.weekly = new Chart(document.getElementById('weeklyChart'), {
+      type: 'radar',
+      data: {
+        labels: ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'],
+        datasets: [{
+          label: 'متوسط الحضور',
+          data: data.weekly,
+          backgroundColor: 'rgba(59,130,246,0.2)',
+          borderColor: '#3b82f6',
+          pointBackgroundColor: '#3b82f6'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          r: {
+            angleLines: { color: gridColor },
+            grid: { color: gridColor },
+            pointLabels: { color: textColor, font: { family: 'IBM Plex Sans Arabic', size: 12 } },
+            ticks: { display: false },
+            min: 0, max: 100
+          }
+        }
       }
-    } catch (error) {
-      console.warn("Fetch failed, using mock save", error);
-      showToast('تم حفظ التفقد (وضع المحاكاة)');
-    } finally {
-      setIsSaving(false);
+    });
+
+    // 4. Top Absent List
+    const listEl = document.getElementById('topAbsentList');
+    if(!data.topAbsent || data.topAbsent.length === 0){
+      listEl.innerHTML = `<li style="padding:20px;text-align:center;color:var(--text-3);font-size:14px">🎉 لا يوجد غياب متكرر</li>`;
+    } else {
+      listEl.innerHTML = data.topAbsent.map((s, i) => `
+        <li class="top-item">
+          <span class="top-rank">${i+1}</span>
+          <span class="top-name">${s.name}</span>
+          <span class="top-val">${s.count} أيام</span>
+        </li>
+      `).join('');
     }
-  };
+  }
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">التفقد السريع - الطلاب</h2>
-          <p className="text-sm text-gray-500">انقر على اسم الطالب لنقله بين القوائم</p>
-        </div>
-        <div className="flex gap-4 items-center w-full md:w-auto">
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-            className="border border-gray-300 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 flex-1 md:flex-none" />
-          <select value={section} onChange={(e) => setSection(e.target.value)}
-            className="border border-gray-300 rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500 flex-1 md:flex-none" >
-            <option value="A">شعبة A</option>
-            <option value="B">شعبة B</option>
-          </select>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 flex flex-col h-[60vh]">
-          <div className="flex justify-between items-center mb-4 border-b border-emerald-200 pb-2">
-            <h3 className="text-lg font-bold text-emerald-800 flex items-center gap-2"><CheckCircle size={20} /> حاضرون</h3>
-            <span className="bg-emerald-200 text-emerald-800 py-1 px-3 rounded-full text-sm font-bold">{presentStudents.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-            {presentStudents.length === 0 ? ( <p className="text-center text-emerald-600/50 mt-10">لا يوجد طلاب في هذه القائمة</p> ) : (
-              presentStudents.map(student => (
-                <div key={student.id} onClick={() => handleStatusChange(student.id, 'A')}
-                  className="bg-white p-3 rounded-lg shadow-sm cursor-pointer border border-emerald-100 hover:border-emerald-300 hover:bg-emerald-50 transition-all flex justify-between items-center group">
-                  <span className="font-medium text-gray-800">{student.name}</span>
-                  <span className="text-xs text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">انقر لتسجيل غياب &larr;</span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-        <div className="bg-red-50 rounded-xl p-4 border border-red-100 flex flex-col h-[60vh]">
-          <div className="flex justify-between items-center mb-4 border-b border-red-200 pb-2">
-            <h3 className="text-lg font-bold text-red-800 flex items-center gap-2"><XCircle size={20} /> غائبون / متأخرون</h3>
-            <span className="bg-red-200 text-red-800 py-1 px-3 rounded-full text-sm font-bold">{otherStudents.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-             {otherStudents.length === 0 ? ( <p className="text-center text-red-600/50 mt-10">الجميع حاضر!</p> ) : (
-              otherStudents.map(student => (
-                <div key={student.id} className={`bg-white p-3 rounded-lg shadow-sm border transition-all flex flex-col gap-2 ${attendanceState[student.id] === 'L' ? 'border-yellow-300' : 'border-red-200'}`}>
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-gray-800">{student.name}</span>
-                    <button onClick={() => handleStatusChange(student.id, 'P')} className="text-xs text-blue-600 hover:text-blue-800 underline bg-blue-50 px-2 py-1 rounded">
-                      &rarr; إعادة للحاضرين
-                    </button>
-                  </div>
-                  <div className="flex gap-2 text-sm mt-1">
-                    <button onClick={() => handleStatusChange(student.id, 'A')} className={`flex-1 py-1 rounded-md text-center transition-colors ${attendanceState[student.id] === 'A' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-red-100'}`}>غائب</button>
-                    <button onClick={() => handleStatusChange(student.id, 'L')} className={`flex-1 py-1 rounded-md text-center flex items-center justify-center gap-1 transition-colors ${attendanceState[student.id] === 'L' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-yellow-100'}`}>
-                      <Clock size={14} /> متأخر
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-      <div className="flex justify-end pt-4">
-        <button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all transform hover:-translate-y-1 disabled:opacity-50 disabled:transform-none">
-          {isSaving ? <span className="animate-pulse">جاري الحفظ...</span> : <> <Save size={20} /> اعتماد وإرسال للحفظ </>}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// --- 3. تسجيل حضور المعلمين ---
-const TeacherAttendance = ({ teachers, showToast }) => {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [attendanceState, setAttendanceState] = useState({});
-
-  useEffect(() => {
-    const initialState = {};
-    teachers.forEach(t => { initialState[t.id] = 'P'; });
-    setAttendanceState(initialState);
-  }, [teachers, date]);
-
-  const handleStatusChange = (id, newStatus) => {
-    setAttendanceState(prev => ({ ...prev, [id]: newStatus }));
-  };
-
-  const presentTeachers = teachers.filter(t => attendanceState[t.id] === 'P');
-  const absentTeachers = teachers.filter(t => attendanceState[t.id] !== 'P');
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    const scriptUrl = localStorage.getItem('jusoor_sheet_url');
-
-    try {
-      const response = await fetch(scriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        redirect: 'follow',
-        body: JSON.stringify({
-          action: 'saveTeacherAttendance',
-          date: date,
-          attendance: attendanceState
-        })
-      });
-      
-      const result = await response.json();
-      if(result.status === 'success') showToast('تم حفظ حضور المعلمين بنجاح');
-      else showToast('حدث خطأ أثناء الحفظ: ' + result.message, 'error');
-    } catch (error) {
-      console.warn("Fetch failed, using mock save", error);
-      showToast('تم حفظ الحضور (وضع المحاكاة)');
-    } finally {
-      setIsSaving(false);
+  function updateChartsTheme(){
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#e6edf3' : '#111827';
+    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)';
+    [charts.trend, charts.section].forEach(chart => {
+      if(!chart) return;
+      chart.options.scales.x.ticks.color = textColor;
+      chart.options.scales.y.ticks.color = textColor;
+      chart.options.scales.y.grid.color  = gridColor;
+      chart.update();
+    });
+    if(charts.weekly){
+      charts.weekly.options.scales.r.pointLabels.color  = textColor;
+      charts.weekly.options.scales.r.angleLines.color   = gridColor;
+      charts.weekly.options.scales.r.grid.color         = gridColor;
+      charts.weekly.update();
     }
-  };
+  }
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-purple-100 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-purple-800">التفقد السريع - الكادر التعليمي</h2>
-        </div>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="border border-gray-300 rounded-lg p-2 focus:ring-purple-500 focus:border-purple-500" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 flex flex-col h-[50vh]">
-          <h3 className="text-lg font-bold text-emerald-800 border-b border-emerald-200 pb-2 mb-4">حاضرون</h3>
-          <div className="flex-1 overflow-y-auto space-y-2">
-            {presentTeachers.map(teacher => (
-              <div key={teacher.id} onClick={() => handleStatusChange(teacher.id, 'A')}
-                className="bg-white p-3 rounded-lg shadow-sm cursor-pointer border border-emerald-100 hover:bg-emerald-50 flex justify-between group">
-                <span className="font-bold text-gray-700">{teacher.name}</span>
-                <span className="text-xs text-emerald-600 opacity-0 group-hover:opacity-100">انقر لتسجيل غياب</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-red-50 rounded-xl p-4 border border-red-100 flex flex-col h-[50vh]">
-          <h3 className="text-lg font-bold text-red-800 border-b border-red-200 pb-2 mb-4">غائبون</h3>
-          <div className="flex-1 overflow-y-auto space-y-2">
-            {absentTeachers.map(teacher => (
-              <div key={teacher.id} onClick={() => handleStatusChange(teacher.id, 'P')}
-                className="bg-white p-3 rounded-lg shadow-sm cursor-pointer border border-red-200 hover:bg-red-50 flex justify-between group">
-                <span className="font-bold text-gray-700">{teacher.name}</span>
-                <span className="text-xs text-red-600 opacity-0 group-hover:opacity-100">انقر للإعادة</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <button onClick={handleSave} disabled={isSaving} className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2">
-          {isSaving ? 'جاري الحفظ...' : <><Save size={20} /> اعتماد الإرسال</>}
-        </button>
-      </div>
-    </div>
-  );
-};
+  /* ════════════════════════════════════
+     LIST UI
+     ════════════════════════════════════ */
+  function switchTab(tab){
+    activeTab = tab;
+    document.getElementById('tab-p').className = 'tab '+(tab==='present'?'ag':'');
+    document.getElementById('tab-a').className = 'tab '+(tab==='absent'?'ar':'');
+    filterAndRender();
+  }
 
-// --- 4. إدارة العلامات ---
-const GradesManager = ({ students, grades, setGrades, showToast }) => {
-  const [section, setSection] = useState('A');
-  const [subjectId, setSubjectId] = useState(MOCK_SUBJECTS[0].id);
-  const [isSaving, setIsSaving] = useState(false);
+  function filterAndRender(){
+    if(viewMode === 'dashboard') return;
 
-  const activeStudents = students.filter(s => s.section === section && s.status === 'Active');
-  const currentSubject = MOCK_SUBJECTS.find(s => s.id === subjectId);
-  const maxGrade = currentSubject ? currentSubject.max : 100;
+    const sec = document.getElementById('sectionFilter').value;
+    const q   = (document.getElementById('srch').value || '').trim();
+    const mob = window.innerWidth < 768;
 
-  const handleGradeChange = (studentId, value) => {
-    let numValue = parseInt(value, 10);
-    if (isNaN(numValue) && value !== '') return;
-    if (numValue < 0) numValue = 0;
-    if (numValue > maxGrade) {
-      showToast(`عذراً، الحد الأقصى لعلامة ${currentSubject.name} هو ${maxGrade}`, 'error');
-      numValue = maxGrade; 
+    const match = s =>
+      (sec==='ALL' || s.section===sec) && (!q || s.name.includes(q));
+
+    const fP = present.filter(match);
+    const fA = absent.filter(match);
+    const tot = fP.length + fA.length || 1;
+
+    const set = (id, v) => { const e=document.getElementById(id); if(e) e.textContent=v; };
+    set('pc-n', fP.length); set('ac-n', fA.length);
+    set('tp-n', fP.length); set('ta-n', fA.length);
+    set('stat-p', fP.length); set('stat-a', fA.length);
+    set('pct-p', Math.round(fP.length/tot*100)+'%');
+    set('pct-a', Math.round(fA.length/tot*100)+'%');
+
+    const cp = document.getElementById('col-p');
+    const ca = document.getElementById('col-a');
+    if(mob){
+      cp.classList.toggle('gone', activeTab!=='present');
+      ca.classList.toggle('gone', activeTab!=='absent');
+    } else {
+      cp.classList.remove('gone');
+      ca.classList.remove('gone');
     }
-    setGrades(prev => ({
-      ...prev,
-      [studentId]: {
-        ...(prev[studentId] || {}),
-        [subjectId]: value === '' ? '' : numValue
-      }
-    }));
-  };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    const scriptUrl = localStorage.getItem('jusoor_sheet_url');
+    render('presentList', fP, 'g', 'present');
+    render('absentList',  fA, 'r', 'absent');
+    checkChanges();
+  }
 
-    try {
-      const response = await fetch(scriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        redirect: 'follow',
-        body: JSON.stringify({
-          action: 'saveGrades',
-          section: section,
-          subjectId: subjectId,
-          grades: grades
-        })
-      });
-      
-      const result = await response.json();
-      if(result.status === 'success') showToast('تم رفع العلامات بنجاح إلى قاعدة البيانات');
-      else showToast('خطأ: ' + result.message, 'error');
-    } catch (error) {
-       console.warn("Fetch failed, using mock save", error);
-       showToast('تم رفع العلامات بنجاح (وضع المحاكاة)');
-    } finally {
-      setIsSaving(false);
+  function ini(name){
+    const p = name.trim().split(' ');
+    return p.length>=2 ? p[0][0]+p[1][0] : p[0].substring(0,2);
+  }
+
+  function render(id, list, color, from){
+    const el = document.getElementById(id);
+    if(!list.length){
+      el.innerHTML = `<div class="empty">
+        <div class="empty-ico"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div class="empty-t">لا توجد نتائج</div>
+        <div class="empty-s">عدّل الفلتر أو البحث</div>
+      </div>`;
+      return;
     }
-  };
+    const arr = color==='g'
+      ? `<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`
+      : `<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>`;
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-800">إدخال العلامات</h2>
-          <div className="bg-blue-50 text-blue-800 px-4 py-2 rounded-lg text-sm font-bold border border-blue-100">
-            الحد الأقصى للمادة: {maxGrade} درجة
-          </div>
+    el.innerHTML = list.map((s, i) => `
+      <div class="s-card h${color}" style="animation-delay:${Math.min(i*.022,.28)}s"
+           onclick="move('${s.id}','${from}')">
+        <div class="av ${color}">${ini(s.name)}</div>
+        <div class="card-body">
+          <div class="card-name">${s.name}</div>
+          <div class="card-sec">شعبة ${s.section}</div>
         </div>
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">المادة والاختبار</label>
-            <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-blue-500 focus:border-blue-500 bg-gray-50">
-              {MOCK_SUBJECTS.map(sub => ( <option key={sub.id} value={sub.id}>{sub.name}</option> ))}
-            </select>
-          </div>
-          <div className="flex-1 md:max-w-xs">
-            <label className="block text-sm font-medium text-gray-700 mb-1">الشعبة</label>
-            <select value={section} onChange={(e) => setSection(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-3 focus:ring-blue-500 focus:border-blue-500 bg-gray-50">
-              <option value="A">شعبة A</option>
-              <option value="B">شعبة B</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-right">
-          <thead className="bg-gray-800 text-white">
-            <tr>
-              <th className="p-4 w-16">الرقم</th>
-              <th className="p-4">اسم الطالب</th>
-              <th className="p-4 w-48 text-center">العلامة (من {maxGrade})</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {activeStudents.length === 0 ? (
-              <tr><td colSpan="3" className="p-8 text-center text-gray-500">لا يوجد طلاب في هذه الشعبة</td></tr>
-            ) : (
-              activeStudents.map((student, index) => (
-                <tr key={student.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-4 text-gray-500">{index + 1}</td>
-                  <td className="p-4 font-bold text-gray-800">{student.name}</td>
-                  <td className="p-4">
-                    <input type="number" min="0" max={maxGrade}
-                      value={(grades[student.id] && grades[student.id][subjectId]) !== undefined ? grades[student.id][subjectId] : ''}
-                      onChange={(e) => handleGradeChange(student.id, e.target.value)}
-                      className="w-full border-2 border-gray-200 rounded-lg p-2 text-center text-lg font-bold focus:border-blue-500 focus:ring-0 outline-none transition-colors"
-                      placeholder="--" />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex justify-end pt-4">
-        <button onClick={handleSave} disabled={isSaving || activeStudents.length === 0} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all">
-          {isSaving ? 'جاري الحفظ...' : <><Save size={20} /> حفظ العلامات</>}
-        </button>
-      </div>
-    </div>
-  );
-};
+        <div class="card-act ${color}">${arr}</div>
+      </div>`).join('');
+  }
 
-// --- 5. قاعدة البيانات المباشرة ---
-const DatabaseView = ({ students, teachers }) => {
-  const [view, setView] = useState('students');
+  function move(id, from){
+    if(from==='present'){
+      const i = present.findIndex(s=>s.id===id);
+      if(i!==-1) absent.unshift(present.splice(i,1)[0]);
+    } else {
+      const i = absent.findIndex(s=>s.id===id);
+      if(i!==-1) present.unshift(absent.splice(i,1)[0]);
+    }
+    filterAndRender();
+  }
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <Database className="text-blue-600" /> عرض البيانات (للاطلاع فقط)
-        </h2>
-        <div className="bg-white rounded-lg p-1 border border-gray-200 flex text-sm">
-          <button onClick={() => setView('students')} className={`px-4 py-2 rounded-md transition-colors ${view === 'students' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>سجل الطلاب</button>
-          <button onClick={() => setView('teachers')} className={`px-4 py-2 rounded-md transition-colors ${view === 'teachers' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-500 hover:bg-gray-50'}`}>سجل المعلمين</button>
-        </div>
-      </div>
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 bg-yellow-50 text-yellow-800 text-sm flex items-center gap-2 border-b border-yellow-100">
-          <AlertCircle size={16} /> هذا القسم مخصص لعرض البيانات كما هي مسجلة في Google Sheets. لا يمكن التعديل من هنا.
-        </div>
-        <div className="overflow-x-auto">
-          {view === 'students' ? (
-            <table className="w-full text-right text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr><th className="p-4">الرقم التعريفي (ID)</th><th className="p-4">الاسم</th><th className="p-4">الجنس</th><th className="p-4">الشعبة</th><th className="p-4">الحالة (Status)</th></tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {students.map(s => (
-                  <tr key={s.id} className="hover:bg-gray-50">
-                    <td className="p-4 font-mono text-xs text-gray-500">{s.id}</td><td className="p-4 font-bold">{s.name}</td><td className="p-4">{s.sex === 'Female' ? 'أنثى' : 'ذكر'}</td><td className="p-4">شعبة {s.section}</td>
-                    <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs ${s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{s.status === 'Active' ? 'نشط' : 'متسرب'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-right text-sm">
-               <thead className="bg-gray-50 text-gray-600">
-                <tr><th className="p-4">المعرف (ID)</th><th className="p-4">اسم المعلم</th><th className="p-4">المادة</th><th className="p-4">رقم الهاتف</th></tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {teachers.map(t => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="p-4 font-mono text-xs text-gray-500">{t.id}</td><td className="p-4 font-bold">{t.name}</td><td className="p-4">{t.subject}</td><td className="p-4 text-left" dir="ltr">{t.phone}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+  function checkChanges(){
+    if(viewMode==='dashboard') return;
+    let ch = false;
+    absent.forEach(s  => { if(origMap[s.id] !== false) ch=true; });
+    present.forEach(s => { if(origMap[s.id] === false) ch=true; });
+    document.getElementById('saveInner').classList.toggle('vis', ch);
+  }
+
+  /* ════════════════════════════════════
+     SAVE
+     ════════════════════════════════════ */
+  function submitAttendance(){
+    const btn  = document.getElementById('saveBtn');
+    const date = document.getElementById('datePicker').value;
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spin" style="width:18px;height:18px;border-width:2px;border-color:rgba(255,255,255,.2);border-top-color:#fff"></div>`;
+
+    const attendance = {};
+    all.forEach(s    => { attendance[s.id] = true;  });
+    absent.forEach(s => { attendance[s.id] = false; });
+
+    const reset = () => {
+      btn.disabled = false;
+      btn.innerHTML = `<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ ومزامنة السجل`;
+    };
+
+    google.script.run
+      .withSuccessHandler(msg => {
+        origMap = {...attendance};
+        checkChanges();
+        showMsg(msg || 'تم الحفظ بنجاح ✓', true);
+        reset();
+      })
+      .withFailureHandler(e => { showMsg(e.message, false); reset(); })
+      .saveAttendance({ date, attendance });
+  }
+
+  function showMsg(msg, ok){
+    const el = document.getElementById('statusMsg');
+    el.textContent = msg; el.className = ok ? 'ok' : 'er';
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display='none'; }, 4000);
+  }
+
+  window.addEventListener('resize', filterAndRender);
+
+  /* ════════════════════════════════════
+     ONBOARDING GUIDE
+     ════════════════════════════════════ */
+  function openGuide(){
+    const el = document.getElementById('guideOverlay');
+    el.classList.remove('gone');
+    el.classList.remove('closing');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeGuide(){
+    const el = document.getElementById('guideOverlay');
+    el.classList.add('closing');
+    setTimeout(()=>{
+      el.classList.add('gone');
+      el.classList.remove('closing');
+      document.body.style.overflow = '';
+    }, 250);
+    localStorage.setItem('jasoor_guide_seen', '1');
+  }
+
+  function handleOverlayClick(e){
+    // إغلاق عند الضغط خارج المودال
+    if(e.target === document.getElementById('guideOverlay')) closeGuide();
+  }
+
+  // إغلاق بـ Escape
+  document.addEventListener('keydown', e=>{
+    if(e.key === 'Escape' && !document.getElementById('guideOverlay').classList.contains('gone')) closeGuide();
+  });
+
+  // عرض الدليل لأول مرة فقط
+  window.addEventListener('load', ()=>{
+    if(!localStorage.getItem('jasoor_guide_seen')){
+      // تأخير بسيط حتى يتحمّل التطبيق أولاً
+      setTimeout(openGuide, 900);
+    }
+  }, {once: false});
+
+
+  /* ════════════════════════════════════
+     UNDO SYSTEM – التراجع عن آخر عملية
+     ════════════════════════════════════ */
+  let undoStack = [];
+
+  function pushUndoSnapshot(){
+    // نسخ الحالة الحالية قبل أي تعديل
+    undoStack.push({
+      present: [...present],
+      absent:  [...absent]
+    });
+    document.getElementById('undoBtn').classList.remove('gone');
+  }
+
+  function undoLast(){
+    if(!undoStack.length) return;
+    const snap = undoStack.pop();
+    present = snap.present;
+    absent  = snap.absent;
+    filterAndRender();
+    if(!undoStack.length){
+      document.getElementById('undoBtn').classList.add('gone');
+    }
+    showMsg('تم التراجع عن آخر عملية ↩', true);
+  }
+
+  // ── تغليف الدوال المؤثرة على الحالة بدون تعديل الكود الأصلي ──
+  (function(){
+    const _move = window.move || move;
+    window.move = function(id, from){
+      pushUndoSnapshot();
+      _move(id, from);
+    };
+
+    const _setAllPresent = window.setAllPresent || setAllPresent;
+    window.setAllPresent = function(){
+      pushUndoSnapshot();
+      _setAllPresent();
+    };
+
+    const _setAllAbsent = window.setAllAbsent || setAllAbsent;
+    window.setAllAbsent = function(){
+      pushUndoSnapshot();
+      _setAllAbsent();
+    };
+
+    const _submitAttendance = window.submitAttendance || submitAttendance;
+    window.submitAttendance = function(){
+      // بعد الحفظ الناجح يُفرَّغ مكدس التراجع (البيانات محفوظة في السحابة)
+      undoStack = [];
+      document.getElementById('undoBtn').classList.add('gone');
+      _submitAttendance();
+    };
+  })();
+</script>
+</body>
+</html>
