@@ -1371,7 +1371,7 @@
    * ★ ضع رابط نشر Apps Script هنا مباشرةً ★
    * الرابط يبدأ بـ: https://script.google.com/macros/s/.../exec
    */
-  const GAS_URL = 'https://script.google.com/macros/s/ضع_رابطك_هنا/exec';
+  const GAS_URL = 'https://script.google.com/a/macros/molhamteam.com/s/AKfycbzr_3aFw5hp_4U7CBzT9IjqEMyjjQjjT-q4bydLrxbMtCeZWXyhfm1k9lKC3hW3EB8s/exec';
 
   /**
    * gasCall(fnName, ...args) → Promise
@@ -1393,7 +1393,7 @@
       // ── بيئة خارجية (GitHub Pages / أي مضيف آخر) ──
       // الأولوية: localStorage أولاً (الإعدادات اليدوية) ثم الرابط المضمّن في الكود
       const url = localStorage.getItem('jasoor_gas_url') || GAS_URL;
-      if(!url || url.includes('ضع_رابطك_هنا')){
+      if(!url || url.includes('https://script.google.com/a/macros/molhamteam.com/s/AKfycbzr_3aFw5hp_4U7CBzT9IjqEMyjjQjjT-q4bydLrxbMtCeZWXyhfm1k9lKC3hW3EB8s/exec')){
         reject(new Error(
           'لم يتم إعداد رابط Google Apps Script.\nاضغط على مؤشر الاتصال في الأعلى لإضافة الرابط.'
         ));
