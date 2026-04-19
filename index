@@ -613,6 +613,81 @@
     .rec-banner svg{width:16px;height:16px;flex-shrink:0}
     @media(max-width:640px){.rec-banner{margin:0 14px 12px}}
 
+    /* ── DRAFT RESTORE BANNER ── */
+    .draft-banner{
+      margin:0 22px 12px;
+      padding:11px 14px;
+      background:rgba(59,130,246,.07);
+      border:1.5px solid rgba(59,130,246,.28);
+      border-radius:var(--r-sm);
+      display:flex;align-items:center;gap:11px;
+      animation:fadeIn .3s ease-out;
+    }
+    [data-theme="dark"] .draft-banner{
+      background:rgba(59,130,246,.1);
+      border-color:rgba(59,130,246,.25);
+    }
+    @media(max-width:640px){.draft-banner{margin:0 14px 12px;flex-wrap:wrap;gap:9px}}
+
+    .draft-banner-ico{
+      width:34px;height:34px;
+      border-radius:8px;
+      background:rgba(59,130,246,.12);
+      display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;
+    }
+    .draft-banner-ico svg{width:17px;height:17px;color:#3b82f6}
+
+    .draft-banner-body{flex:1;min-width:0}
+    .draft-banner-title{
+      font-size:13px;font-weight:700;
+      color:#1d4ed8;margin-bottom:2px;
+    }
+    [data-theme="dark"] .draft-banner-title{color:#93c5fd}
+    .draft-banner-sub{
+      font-size:12px;color:#3b82f6;font-weight:500;
+    }
+    [data-theme="dark"] .draft-banner-sub{color:#60a5fa}
+
+    .draft-banner-actions{display:flex;gap:7px;flex-shrink:0}
+
+    .draft-restore-btn{
+      height:32px;padding:0 13px;
+      background:#3b82f6;color:#fff;
+      border:none;border-radius:7px;
+      font-family:var(--font);font-size:12px;font-weight:700;
+      cursor:pointer;white-space:nowrap;
+      transition:background .14s,transform .12s;
+    }
+    .draft-restore-btn:hover{background:#2563eb}
+    .draft-restore-btn:active{transform:scale(.96)}
+
+    .draft-discard-btn{
+      height:32px;padding:0 11px;
+      background:transparent;
+      border:1px solid rgba(59,130,246,.35);
+      border-radius:7px;
+      font-family:var(--font);font-size:12px;font-weight:600;
+      color:#3b82f6;cursor:pointer;white-space:nowrap;
+      transition:border-color .14s,background .14s;
+    }
+    .draft-discard-btn:hover{background:rgba(59,130,246,.08);border-color:#3b82f6}
+
+    /* pulse indicator on auto-save */
+    @keyframes draftSaved{
+      0%{opacity:1} 50%{opacity:.4} 100%{opacity:1}
+    }
+    .draft-indicator{
+      position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+      background:rgba(59,130,246,.9);color:#fff;
+      font-size:11px;font-weight:600;
+      padding:5px 14px;border-radius:20px;
+      pointer-events:none;
+      opacity:0;transition:opacity .3s;
+      white-space:nowrap;z-index:300;
+    }
+    .draft-indicator.show{opacity:1}
+
     /* ══════════════════════════════════════
        ONBOARDING GUIDE MODAL
        ══════════════════════════════════════ */
@@ -735,6 +810,134 @@
     .help-btn:hover{background:var(--accent-alpha);border-color:var(--accent);color:var(--accent)}
 
     /* ══════════════════════════════════════
+       CONNECTION INDICATOR
+       ══════════════════════════════════════ */
+    .conn-indicator{
+      display:flex;align-items:center;gap:6px;
+      height:40px;padding:0 11px;
+      border-radius:var(--r-sm);
+      border:1px solid var(--border-med);
+      background:var(--surface-2);
+      font-size:12px;font-weight:600;
+      cursor:pointer;
+      transition:all .18s;
+      white-space:nowrap;
+      flex-shrink:0;
+    }
+    .conn-indicator:hover{border-color:var(--accent);color:var(--accent)}
+    .conn-dot{
+      width:7px;height:7px;border-radius:50%;
+      flex-shrink:0;
+      transition:background .3s;
+    }
+    .conn-dot.connected{background:#16a34a;box-shadow:0 0 0 2px rgba(22,163,74,.2)}
+    .conn-dot.disconnected{background:#e53e3e;box-shadow:0 0 0 2px rgba(229,62,62,.2)}
+    .conn-dot.embedded{background:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.2)}
+    .conn-label{color:var(--text-2)}
+    @media(max-width:640px){.conn-label{display:none}}
+
+    /* ══════════════════════════════════════
+       SETTINGS MODAL
+       ══════════════════════════════════════ */
+    .settings-overlay{
+      position:fixed;inset:0;z-index:998;
+      background:rgba(0,0,0,.5);
+      backdrop-filter:blur(4px);
+      display:flex;align-items:center;justify-content:center;
+      padding:16px;
+      opacity:0;
+      animation:guideIn .3s ease-out forwards;
+    }
+    .settings-overlay.closing{animation:guideOut .22s ease-in forwards}
+
+    .settings-modal{
+      background:var(--surface);
+      border-radius:var(--r-lg);
+      box-shadow:0 20px 60px rgba(0,0,0,.22);
+      max-width:460px;width:100%;
+      padding:26px 26px 22px;
+      transform:translateY(16px);
+      animation:modalUp .3s ease-out forwards;
+    }
+
+    .settings-header{
+      display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:20px;
+    }
+    .settings-title{
+      font-size:17px;font-weight:700;color:var(--text-1);
+      display:flex;align-items:center;gap:9px;
+    }
+    .settings-title svg{width:18px;color:var(--accent)}
+    .settings-close{
+      width:32px;height:32px;border:none;background:var(--surface-2);
+      border-radius:7px;cursor:pointer;color:var(--text-2);
+      display:flex;align-items:center;justify-content:center;
+      transition:background .14s,color .14s;
+    }
+    .settings-close:hover{background:var(--red-badge);color:var(--red)}
+    .settings-close svg{width:14px;height:14px}
+
+    .settings-section{
+      margin-bottom:18px;
+    }
+    .settings-lbl{
+      font-size:12px;font-weight:700;color:var(--text-2);
+      text-transform:uppercase;letter-spacing:.06em;
+      margin-bottom:7px;display:block;
+    }
+    .settings-input{
+      width:100%;height:44px;
+      background:var(--surface-2);
+      border:1.5px solid var(--border-med);
+      border-radius:var(--r-sm);
+      font-family:var(--font);font-size:13px;
+      color:var(--text-1);
+      padding:0 13px;outline:none;
+      transition:border-color .18s,box-shadow .18s;
+      direction:ltr;
+    }
+    .settings-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-alpha)}
+    .settings-input::placeholder{color:var(--text-3);direction:rtl}
+    .settings-hint{
+      font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.5;
+    }
+    .settings-hint b{color:var(--text-2)}
+
+    .settings-status{
+      display:flex;align-items:center;gap:8px;
+      padding:10px 13px;
+      border-radius:var(--r-sm);
+      font-size:12px;font-weight:600;
+      margin-bottom:16px;
+    }
+    .settings-status.ok{background:var(--green-badge);color:var(--green-text)}
+    .settings-status.er{background:var(--red-badge);color:var(--red-text)}
+    .settings-status.info{background:rgba(59,130,246,.1);color:#2563eb}
+    .settings-status svg{width:14px;height:14px;flex-shrink:0}
+
+    .settings-save-btn{
+      width:100%;height:46px;
+      background:var(--accent);color:#fff;
+      border:none;border-radius:var(--r-md);
+      font-family:var(--font);font-size:14px;font-weight:700;
+      cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      box-shadow:0 4px 14px rgba(229,62,62,.28);
+      transition:background .14s,transform .12s;
+    }
+    .settings-save-btn:hover{background:var(--accent-dark)}
+    .settings-save-btn:active{transform:scale(.98)}
+    .settings-save-btn svg{width:15px;height:15px}
+
+    .settings-divider{
+      height:1px;background:var(--border);margin:16px 0;
+    }
+    .settings-note{
+      font-size:11px;color:var(--text-3);line-height:1.6;text-align:center;
+    }
+
+    /* ══════════════════════════════════════
        UNDO BUTTON
        ══════════════════════════════════════ */
     .undo-btn{
@@ -809,6 +1012,12 @@
           <svg id="ico-sun" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         </button>
 
+        <!-- Connection status indicator -->
+        <button id="connIndicator" class="conn-indicator" onclick="openSettings()" title="إعدادات الاتصال">
+          <span class="conn-dot disconnected" id="connDot"></span>
+          <span class="conn-label" id="connLabel">الاتصال</span>
+        </button>
+
         <!-- Help / Guide button -->
         <button class="help-btn" onclick="openGuide()" title="دليل الاستخدام">
           <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -870,6 +1079,25 @@
         <line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
       <span>لم يُسجَّل حضور هذا اليوم بعد — حدِّد الغائبين ثم اضغط حفظ</span>
+    </div>
+
+    <!-- بانر استعادة المسودة: يظهر حين توجد بيانات غير محفوظة في الذاكرة المحلية -->
+    <div id="draftBanner" class="draft-banner gone">
+      <div class="draft-banner-ico">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M18.364 5.636a9 9 0 0 1 .203 12.539M15.536 8.464a5 5 0 0 1 .1 6.872M2 2l20 20M9.9 9.9a5 5 0 0 0 4.2 8.1M5.637 5.637a9 9 0 0 0 12.526 12.526"/>
+        </svg>
+      </div>
+      <div class="draft-banner-body">
+        <div class="draft-banner-title">⚡ يوجد مسودة غير محفوظة في هذا الجهاز</div>
+        <div class="draft-banner-sub">آخر تعديل تلقائي: الساعة <span id="draftTime">--:--</span> — هل تريد استعادة التعديلات؟</div>
+      </div>
+      <div class="draft-banner-actions">
+        <button class="draft-restore-btn" onclick="restoreDraft()">
+          ↩ استعادة
+        </button>
+        <button class="draft-discard-btn" onclick="discardDraft()">تجاهل</button>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -1010,8 +1238,60 @@
     </div>
   </div>
 
+  <!-- مؤشر الحفظ التلقائي المحلي -->
+  <div id="draftIndicator" class="draft-indicator">💾 حُفظت مسودة محلية</div>
+
   <!-- ══════════════════════════════════════
-       ONBOARDING GUIDE MODAL
+       SETTINGS MODAL – إعدادات الاتصال
+       ══════════════════════════════════════ -->
+  <div id="settingsOverlay" class="settings-overlay gone" onclick="handleSettingsOverlayClick(event)">
+    <div class="settings-modal" id="settingsModal">
+
+      <div class="settings-header">
+        <div class="settings-title">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          إعدادات الاتصال بـ Apps Script
+        </div>
+        <button class="settings-close" onclick="closeSettings()">
+          <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- حالة الاتصال الحالية -->
+      <div id="settingsStatus" class="settings-status info">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="settingsStatusText">جارٍ فحص بيئة التشغيل…</span>
+      </div>
+
+      <div class="settings-section">
+        <label class="settings-lbl" for="gasUrlInput">رابط Google Apps Script Web App</label>
+        <input
+          id="gasUrlInput"
+          class="settings-input"
+          type="url"
+          placeholder="https://script.google.com/macros/s/…/exec"
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <div class="settings-hint">
+          الرابط الكامل لـ Web App بعد النشر من Apps Script.<br>
+          <b>الحصول عليه:</b> نشر → نشر جديد → تطبيق ويب → انسخ الرابط
+        </div>
+      </div>
+
+      <button class="settings-save-btn" onclick="saveGasUrl()">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        حفظ الرابط وإعادة الاتصال
+      </button>
+
+      <div class="settings-divider"></div>
+      <div class="settings-note">
+        هذا الرابط يُحفظ في هذا الجهاز فقط ولا يُرسل لأي طرف ثالث.<br>
+        عند التشغيل داخل Apps Script مباشرةً لا حاجة لهذا الإعداد.
+      </div>
+
+    </div>
+  </div>
        ══════════════════════════════════════ -->
   <div id="guideOverlay" class="guide-overlay gone" onclick="handleOverlayClick(event)">
     <div class="guide-modal" id="guideModal">
@@ -1082,6 +1362,61 @@
   </div>
 
 <script>
+  /* ════════════════════════════════════════════════════════════════
+     GAS BRIDGE – طبقة الاتصال الموحّدة
+     تعمل تلقائياً داخل Apps Script أو عبر fetch من GitHub Pages
+     ════════════════════════════════════════════════════════════════ */
+
+  /**
+   * ★ ضع رابط نشر Apps Script هنا مباشرةً ★
+   * الرابط يبدأ بـ: https://script.google.com/macros/s/.../exec
+   */
+  const GAS_URL = 'https://script.google.com/macros/s/ضع_رابطك_هنا/exec';
+
+  /**
+   * gasCall(fnName, ...args) → Promise
+   * بيئة Apps Script  → google.script.run
+   * بيئة خارجية       → fetch POST إلى Web App URL
+   */
+  function gasCall(fnName, ...args){
+    return new Promise((resolve, reject) => {
+
+      // ── بيئة Apps Script الأصلية ──
+      if(typeof google !== 'undefined' && google.script && google.script.run){
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(e => reject(e))
+          [fnName](...args);
+        return;
+      }
+
+      // ── بيئة خارجية (GitHub Pages / أي مضيف آخر) ──
+      // الأولوية: localStorage أولاً (الإعدادات اليدوية) ثم الرابط المضمّن في الكود
+      const url = localStorage.getItem('jasoor_gas_url') || GAS_URL;
+      if(!url || url.includes('ضع_رابطك_هنا')){
+        reject(new Error(
+          'لم يتم إعداد رابط Google Apps Script.\nاضغط على مؤشر الاتصال في الأعلى لإضافة الرابط.'
+        ));
+        return;
+      }
+
+      fetch(url, {
+        method : 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body   : JSON.stringify({ action: fnName, args })
+      })
+      .then(r => {
+        if(!r.ok) throw new Error('HTTP ' + r.status + ' – تحقق من صلاحيات النشر');
+        return r.json();
+      })
+      .then(res => {
+        if(res.ok) resolve(res.data);
+        else reject(new Error(res.error || 'خطأ غير معروف من الخادم'));
+      })
+      .catch(reject);
+    });
+  }
+
   /* ════════════════════════════════════
      STATE
      ════════════════════════════════════ */
@@ -1143,8 +1478,8 @@
     document.getElementById('datePicker').value = today;
     updateTodayIndicator();
 
-    google.script.run
-      .withSuccessHandler(data => {
+    gasCall('getInitialData')
+      .then(data => {
         all = data.students;
         document.getElementById('stat-total').textContent = all.length;
         origMap = data.initialAttendance || {};
@@ -1155,8 +1490,7 @@
         document.getElementById('loading').classList.add('gone');
         document.getElementById('attendanceUI').classList.remove('gone');
       })
-      .withFailureHandler(e => showMsg(e.message, false))
-      .getInitialData();
+      .catch(e => showMsg(e.message, false));
   };
 
   function populateSections(secs){
@@ -1187,15 +1521,18 @@
   function loadAttendanceForDate(){
     const d = document.getElementById('datePicker').value;
     document.getElementById('attendanceUI').classList.add('dim');
-    google.script.run
-      .withSuccessHandler(result => {
+    gasCall('getAttendanceForDate', d)
+      .then(result => {
         // result = { attendance: {…}, isRecorded: bool }
         origMap = result.attendance;
         applyMap(result.attendance);
         showRecordingBanner(!result.isRecorded); // ← بانر تحذيري للأيام غير المسجَّلة
         document.getElementById('attendanceUI').classList.remove('dim');
       })
-      .getAttendanceForDate(d);
+      .catch(e => {
+        showMsg(e.message, false);
+        document.getElementById('attendanceUI').classList.remove('dim');
+      });
   }
 
   /* إظهار/إخفاء بانر "لم يُسجَّل هذا اليوم بعد" */
@@ -1267,8 +1604,8 @@
     dash.classList.add('dim');
 
     // ── استدعاء الدالة الحقيقية من الـ backend ──
-    google.script.run
-      .withSuccessHandler(data => {
+    gasCall('getDashboardData')
+      .then(data => {
         renderDashboardMeta(data.meta);
         if(data.meta && data.meta.noData){
           showNoDashboardData();
@@ -1277,11 +1614,10 @@
         }
         dash.classList.remove('dim');
       })
-      .withFailureHandler(e => {
+      .catch(e => {
         showMsg('خطأ في تحميل لوحة التحكم: ' + e.message, false);
         dash.classList.remove('dim');
-      })
-      .getDashboardData();
+      });
   }
 
   /* ── تحديث شريط المعلومات في الداشبورد ── */
@@ -1553,15 +1889,14 @@
       btn.innerHTML = `<svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> حفظ ومزامنة السجل`;
     };
 
-    google.script.run
-      .withSuccessHandler(msg => {
+    gasCall('saveAttendance', { date, attendance })
+      .then(msg => {
         origMap = {...attendance};
         checkChanges();
         showMsg(msg || 'تم الحفظ بنجاح ✓', true);
         reset();
       })
-      .withFailureHandler(e => { showMsg(e.message, false); reset(); })
-      .saveAttendance({ date, attendance });
+      .catch(e => { showMsg(e.message, false); reset(); });
   }
 
   function showMsg(msg, ok){
@@ -1611,6 +1946,105 @@
       setTimeout(openGuide, 900);
     }
   }, {once: false});
+
+
+  /* ════════════════════════════════════
+     CONNECTION INDICATOR
+     ════════════════════════════════════ */
+  function updateConnIndicator(){
+    const dot   = document.getElementById('connDot');
+    const label = document.getElementById('connLabel');
+    if(!dot || !label) return;
+
+    // داخل Apps Script
+    if(typeof google !== 'undefined' && google.script && google.script.run){
+      dot.className   = 'conn-dot embedded';
+      label.textContent = 'Apps Script';
+      return;
+    }
+    // خارجي: تحقق من وجود URL محفوظ
+    const url = localStorage.getItem('jasoor_gas_url') || '';
+    if(url){
+      dot.className   = 'conn-dot connected';
+      label.textContent = 'متصل';
+    } else {
+      dot.className   = 'conn-dot disconnected';
+      label.textContent = 'غير متصل';
+    }
+  }
+  // تحديث المؤشر عند التحميل
+  updateConnIndicator();
+
+
+  /* ════════════════════════════════════
+     SETTINGS MODAL
+     ════════════════════════════════════ */
+  function openSettings(){
+    const overlay = document.getElementById('settingsOverlay');
+    overlay.classList.remove('gone','closing');
+    document.body.style.overflow = 'hidden';
+
+    // تعبئة الحقل بالقيمة المحفوظة
+    const saved = localStorage.getItem('jasoor_gas_url') || '';
+    document.getElementById('gasUrlInput').value = saved;
+
+    // تحديث رسالة الحالة
+    const statusEl   = document.getElementById('settingsStatus');
+    const statusText = document.getElementById('settingsStatusText');
+
+    if(typeof google !== 'undefined' && google.script && google.script.run){
+      statusEl.className  = 'settings-status info';
+      statusText.textContent = '✅ يعمل داخل Apps Script — الاتصال مباشر ولا حاجة للرابط.';
+    } else if(saved){
+      statusEl.className  = 'settings-status ok';
+      statusText.textContent = '✅ رابط محفوظ — التطبيق متصل بـ Apps Script.';
+    } else {
+      statusEl.className  = 'settings-status er';
+      statusText.textContent = '⚠️ لم يُحدَّد رابط بعد — أدخل رابط Web App أدناه.';
+    }
+  }
+
+  function closeSettings(){
+    const overlay = document.getElementById('settingsOverlay');
+    overlay.classList.add('closing');
+    setTimeout(()=>{
+      overlay.classList.add('gone');
+      overlay.classList.remove('closing');
+      document.body.style.overflow = '';
+    }, 220);
+  }
+
+  function handleSettingsOverlayClick(e){
+    if(e.target === document.getElementById('settingsOverlay')) closeSettings();
+  }
+
+  function saveGasUrl(){
+    const val = (document.getElementById('gasUrlInput').value || '').trim();
+
+    if(!val){
+      alert('يرجى إدخال الرابط أولاً.');
+      return;
+    }
+    if(!val.startsWith('https://script.google.com')){
+      alert('الرابط غير صحيح.\nيجب أن يبدأ بـ: https://script.google.com');
+      return;
+    }
+
+    localStorage.setItem('jasoor_gas_url', val);
+    updateConnIndicator();
+    closeSettings();
+    showMsg('✓ تم حفظ الرابط — جاري إعادة تحميل البيانات…', true);
+
+    // إعادة تحميل التطبيق بالرابط الجديد
+    setTimeout(() => window.location.reload(), 1200);
+  }
+
+  // إغلاق نافذة الإعدادات بـ Escape
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape'){
+      if(!document.getElementById('settingsOverlay').classList.contains('gone')) closeSettings();
+    }
+  });
 
 
   /* ════════════════════════════════════
@@ -1666,6 +2100,169 @@
       document.getElementById('undoBtn').classList.add('gone');
       _submitAttendance();
     };
+  })();
+
+  /* ════════════════════════════════════════════════════════════════
+     DRAFT SYSTEM – الذاكرة التاريخية والحفظ التلقائي المحلي
+     يحمي البيانات من انقطاع الإنترنت قبل الحفظ في الشيت
+     ════════════════════════════════════════════════════════════════ */
+  let _draftInteracted   = false; // يصبح true عند أول تعديل من المستخدم
+  let _pendingDraftClear = null;  // تاريخ مُنتظر مسح مسودته بعد الحفظ
+  let _currentDraft      = null;  // بيانات المسودة المقترحة للاستعادة
+  let _draftTimer        = null;  // مؤقت إظهار مؤشر الحفظ التلقائي
+
+  // ── حفظ المسودة تلقائياً في localStorage ──
+  function autoDraft(){
+    if(!_draftInteracted || !all.length) return;
+    const date = document.getElementById('datePicker').value;
+    if(!date) return;
+    const attendance = {};
+    all.forEach(s  => { attendance[s.id] = true;  });
+    absent.forEach(s => { attendance[s.id] = false; });
+    try {
+      localStorage.setItem('jasoor_draft_' + date, JSON.stringify({
+        date, attendance, savedAt: Date.now()
+      }));
+    } catch(e){ return; }
+    // إظهار مؤشر "حُفظت مسودة" لمدة قصيرة
+    const ind = document.getElementById('draftIndicator');
+    if(ind){
+      ind.classList.add('show');
+      clearTimeout(_draftTimer);
+      _draftTimer = setTimeout(()=>{ ind.classList.remove('show'); }, 1800);
+    }
+  }
+
+  // ── مسح مسودة يوم محدد ──
+  function clearDraft(date){
+    try { localStorage.removeItem('jasoor_draft_' + date); } catch(e){}
+    _currentDraft = null;
+    document.getElementById('draftBanner').classList.add('gone');
+  }
+
+  // ── فحص وجود مسودة مختلفة عن بيانات السيرفر ──
+  function checkDraftForDate(date, serverMap){
+    if(!date || !all.length) return;
+    let raw;
+    try { raw = localStorage.getItem('jasoor_draft_' + date); } catch(e){ return; }
+    if(!raw) return;
+    let draft;
+    try { draft = JSON.parse(raw); } catch(e){ return; }
+    if(!draft || !draft.attendance) return;
+
+    // مقارنة كل طالب: هل المسودة تختلف عن السيرفر؟
+    let differs = false;
+    for(const s of all){
+      const dv = (draft.attendance[s.id] !== false); // true = حاضر
+      const sv = (serverMap[s.id]        !== false);
+      if(dv !== sv){ differs = true; break; }
+    }
+    if(!differs){
+      // مطابقة → حُفظت سابقاً → نمسحها صامتين
+      clearDraft(date);
+      return;
+    }
+    // يوجد فرق: عرض بانر الاستعادة
+    _currentDraft = draft;
+    const d = new Date(draft.savedAt);
+    const timeStr = d.toLocaleTimeString('ar-SA', {
+      hour: '2-digit', minute: '2-digit', hour12: true
+    });
+    document.getElementById('draftTime').textContent = timeStr;
+    document.getElementById('draftBanner').classList.remove('gone');
+  }
+
+  // ── استعادة المسودة ──
+  function restoreDraft(){
+    if(!_currentDraft) return;
+    document.getElementById('draftBanner').classList.add('gone');
+    _draftInteracted = false; // تعطيل الحفظ التلقائي مؤقتاً أثناء الاستعادة
+    applyMap(_currentDraft.attendance);
+    _draftInteracted = true;
+    showMsg('✓ تم استعادة آخر مسودة محفوظة محلياً', true);
+  }
+
+  // ── تجاهل المسودة ──
+  function discardDraft(){
+    const date = document.getElementById('datePicker').value;
+    clearDraft(date);
+  }
+
+  // ── مراقبة statusMsg لمسح المسودة بعد الحفظ الناجح في السحابة ──
+  (function(){
+    const statusEl = document.getElementById('statusMsg');
+    if(!statusEl) return;
+    const obs = new MutationObserver(()=>{
+      if(_pendingDraftClear
+         && statusEl.classList.contains('ok')
+         && statusEl.style.display !== 'none'){
+        clearDraft(_pendingDraftClear);
+        _pendingDraftClear = null;
+      }
+    });
+    obs.observe(statusEl, { attributes: true, attributeFilter: ['class','style'] });
+  })();
+
+  // ── تغليف الدوال المؤثرة على الحالة لتفعيل الحفظ التلقائي ──
+  (function(){
+    // move
+    const _moveDraft = window.move;
+    window.move = function(id, from){
+      _draftInteracted = true;
+      _moveDraft(id, from);
+      autoDraft();
+    };
+    // setAllPresent
+    const _sapDraft = window.setAllPresent;
+    window.setAllPresent = function(){
+      _draftInteracted = true;
+      _sapDraft();
+      autoDraft();
+    };
+    // setAllAbsent
+    const _saaDraft = window.setAllAbsent;
+    window.setAllAbsent = function(){
+      _draftInteracted = true;
+      _saaDraft();
+      autoDraft();
+    };
+    // submitAttendance: تسجيل التاريخ المُراد مسح مسودته
+    const _submitDraft = window.submitAttendance;
+    window.submitAttendance = function(){
+      _pendingDraftClear = document.getElementById('datePicker').value;
+      _submitDraft();
+    };
+  })();
+
+  // ── مراقبة attendanceUI للكشف عن تحميل بيانات جديدة من السيرفر ──
+  // يغطي حالتين: (1) التحميل الأول  (2) تغيير التاريخ
+  (function(){
+    const attUI = document.getElementById('attendanceUI');
+    if(!attUI) return;
+    let initChecked = false;
+    let prevDim     = null;
+
+    const runCheck = ()=>{
+      const date = document.getElementById('datePicker').value;
+      if(date && all.length) checkDraftForDate(date, origMap);
+    };
+
+    const obs = new MutationObserver(()=>{
+      const hasDim  = attUI.classList.contains('dim');
+      const hasGone = attUI.classList.contains('gone');
+
+      // حالة 1: التحميل الأوّل – 'gone' يُزال وتظهر الواجهة
+      if(!hasGone && !hasDim && !initChecked){
+        initChecked = true;
+        setTimeout(runCheck, 150);
+      }
+      // حالة 2: تغيير التاريخ – 'dim' يُزال بعد رجوع البيانات من السيرفر
+      if(!hasGone && prevDim === true && !hasDim){
+        setTimeout(runCheck, 150);
+      }
+      prevDim = hasDim;
+    });
+    obs.observe(attUI, { attributes: true, attributeFilter: ['class'] });
   })();
 </script>
 </body>
