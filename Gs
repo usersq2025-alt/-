@@ -1,0 +1,325 @@
+/**
+ * التطبيق: نظام الحضور الذكي - جسور (النسخة النهائية الموحدة)
+ * الوظيفة: إدارة الحضور والغياب مع ذاكرة تاريخية وفلترة متقدمة
+ */
+
+const SHEET_NAME = "Students-Att"; 
+const HEADER_ROW = 2; 
+const START_COL_DATES = 7; 
+
+function doGet() {
+  return HtmlService.createTemplateFromFile('index')
+    .evaluate()
+    .setTitle('جسور - نظام الحضور الذكي')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * جلب البيانات الأولية وحالة اليوم
+ */
+function getInitialData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error("ورقة 'Students-Att' غير موجودة");
+
+  const fullData = sheet.getDataRange().getValues();
+  const headers = fullData[HEADER_ROW - 1];
+  
+  // 1. التواريخ المتاحة في الملف
+  const dates = [];
+  for (let i = START_COL_DATES - 1; i < headers.length; i++) {
+    if (headers[i]) {
+      let dateVal = headers[i];
+      if (dateVal instanceof Date) {
+        dateVal = Utilities.formatDate(dateVal, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+      }
+      dates.push(dateVal.toString());
+    }
+  }
+
+  // 2. الطلاب والشعب (تجاهل المتسربين)
+  const students = [];
+  const sectionsSet = new Set();
+  for (let j = HEADER_ROW; j < fullData.length; j++) {
+    const row = fullData[j];
+    if (row[0] && !row[4]) { 
+      students.push({
+        id: row[0],
+        name: row[1],
+        section: row[3] || "غير محدد"
+      });
+      if(row[3]) sectionsSet.add(row[3]);
+    }
+  }
+
+  const today = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+  const todayData = getAttendanceForDate(today); // الآن يُرجع {attendance, isRecorded}
+
+  return {
+    students: students,
+    dates: dates,
+    sections: Array.from(sectionsSet).sort(),
+    initialAttendance: todayData.attendance,
+    isTodayRecorded:   todayData.isRecorded   // ← يُخبر الواجهة هل اليوم مسجَّل أم لا
+  };
+}
+
+/**
+ * قراءة حالة الحضور المسجلة لتاريخ محدد
+ */
+function getAttendanceForDate(dateStr) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  const fullData = sheet.getDataRange().getValues();
+  const headers = fullData[HEADER_ROW - 1];
+
+  let colIndex = -1;
+  for (let i = START_COL_DATES - 1; i < headers.length; i++) {
+    let d = headers[i];
+    if (d instanceof Date) d = Utilities.formatDate(d, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+    if (d.toString() === dateStr) {
+      colIndex = i;
+      break;
+    }
+  }
+
+  const attendanceMap = {};
+  let isRecorded = false; // true فقط إذا وُجدت قيمة صريحة محفوظة (true/false) في الشيت
+
+  if (colIndex !== -1) {
+    for (let j = HEADER_ROW; j < fullData.length; j++) {
+      const studentId = fullData[j][0];
+      const status    = fullData[j][colIndex];
+      if (studentId) {
+        // خلية فارغة "" = لم يُحفظ شيء بعد
+        // true / false صريحة = بيانات محفوظة فعلاً عبر saveAttendance
+        const hasExplicitValue = (status !== "" && status !== null && status !== undefined);
+        if (hasExplicitValue) isRecorded = true;
+
+        // للواجهة نضع الافتراضي حاضر حتى يبدأ المعلم التسجيل
+        attendanceMap[studentId] = hasExplicitValue
+          ? (status === true || String(status).toLowerCase() === "true")
+          : true;
+      }
+    }
+  }
+
+  return { attendance: attendanceMap, isRecorded };
+}
+
+/**
+ * حفظ البيانات في الملف مباشرة
+ */
+function saveAttendance(submission) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  const fullData = sheet.getDataRange().getValues();
+  const headers = fullData[HEADER_ROW - 1];
+  
+  let colIndex = -1;
+  for (let i = START_COL_DATES - 1; i < headers.length; i++) {
+    let d = headers[i];
+    if (d instanceof Date) d = Utilities.formatDate(d, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+    if (d.toString() === submission.date) {
+      colIndex = i + 1;
+      break;
+    }
+  }
+
+  if (colIndex === -1) throw new Error("التاريخ غير مدرج في جدول البيانات");
+
+  const idsInSheet = fullData.map(r => r[0]);
+  for (const [id, isPresent] of Object.entries(submission.attendance)) {
+    const rowIndex = idsInSheet.indexOf(id);
+    if (rowIndex !== -1) {
+      sheet.getRange(rowIndex + 1, colIndex).setValue(isPresent);
+    }
+  }
+
+  return "تم حفظ الحضور في السحابة بنجاح!";
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * لوحة التحكم: جلب وتحليل بيانات الحضور من 15/4 حتى الأمس (دون تضمين اليوم)
+ * ذكي: دائماً يحسب النطاق تلقائياً بناءً على التاريخ الحالي
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+function getDashboardData() {
+  const ss   = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAME);
+  const fullData = sheet.getDataRange().getValues();
+  const headers  = fullData[HEADER_ROW - 1];
+  const tz = ss.getSpreadsheetTimeZone();
+
+  // حساب النطاق الزمني الذكي
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // تاريخ البداية الثابت: 15 أبريل من السنة الحالية
+  const startDate = new Date(today.getFullYear(), 3, 15); // أبريل = الشهر 3 (zero-indexed)
+  startDate.setHours(0, 0, 0, 0);
+
+  // تاريخ النهاية: الأمس (قبل اليوم الحالي)
+  const endDate = new Date(today);
+  endDate.setDate(endDate.getDate() - 1);
+  endDate.setHours(23, 59, 59, 999);
+
+  // إذا اليوم هو 15/4 نفسه → لا توجد بيانات بعد
+  if (endDate < startDate) {
+    return {
+      trend: { labels: [], values: [] },
+      sections: [],
+      weekly: [0, 0, 0, 0, 0],
+      topAbsent: [],
+      meta: {
+        activeDays: 0,
+        startDate: Utilities.formatDate(startDate, tz, "yyyy-MM-dd"),
+        endDate:   Utilities.formatDate(today, tz, "yyyy-MM-dd"),
+        noData: true
+      }
+    };
+  }
+
+  // ── جمع بيانات الطلاب (استثناء المتسربين) ──
+  const students = [];
+  for (let j = HEADER_ROW; j < fullData.length; j++) {
+    const row = fullData[j];
+    if (row[0] && !row[4]) {
+      students.push({ id: row[0], name: row[1], section: row[3] || "غير محدد", rowIdx: j });
+    }
+  }
+
+  // ── استخراج أعمدة التواريخ ضمن النطاق ──
+  const validCols = [];
+  for (let i = START_COL_DATES - 1; i < headers.length; i++) {
+    let d = headers[i];
+    if (!d) continue;
+    let colDate;
+    if (d instanceof Date) {
+      colDate = new Date(d);
+    } else {
+      const parts = d.toString().split('-');
+      if (parts.length !== 3) continue;
+      colDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+    colDate.setHours(0, 0, 0, 0);
+    if (colDate >= startDate && colDate <= endDate) {
+      // ── الفلتر الجوهري: تجاهل الأيام التي لم يُحفظ فيها حضور ──
+      // الخلية الفارغة "" = لم يُسجَّل شيء → هذا اليوم غير حقيقي للإحصاء
+      const hasRecordedData = students.some(s => {
+        const val = fullData[s.rowIdx][i];
+        return val !== "" && val !== null && val !== undefined;
+      });
+      if (!hasRecordedData) continue; // تخطِّ هذا اليوم كلياً
+
+      validCols.push({
+        col: i,
+        date: colDate,
+        label: Utilities.formatDate(colDate, tz, "MM/dd"),
+        dayOfWeek: colDate.getDay()  // 0=الأحد ... 4=الخميس
+      });
+    }
+  }
+  // ترتيب زمني
+  validCols.sort((a, b) => a.date - b.date);
+
+  // ── احتساب نسب الحضور لكل يوم ──
+  const dateStats = validCols.map(({ col, date, label, dayOfWeek }) => {
+    let presentCount = 0;
+    const total = students.length;
+    students.forEach(s => {
+      const status = fullData[s.rowIdx][col];
+      // نحسب فقط القيم الصريحة - الخلايا الفارغة لا تُحسب حضوراً
+      if (status === true || String(status).toLowerCase() === "true") {
+        presentCount++;
+      }
+    });
+    return {
+      label,
+      date,
+      dayOfWeek,
+      rate: total > 0 ? Math.round(presentCount / total * 100) : 0,
+      present: presentCount,
+      total
+    };
+  });
+
+  // ── مخطط الاتجاه: آخر 7 أيام نشطة ──
+  const trendData = dateStats.slice(-7);
+
+  // ── مقارنة الشعب (متوسط جميع الأيام) ──
+  const sectionMap = {};
+  students.forEach(s => {
+    if (!sectionMap[s.section]) sectionMap[s.section] = { present: 0, total: 0 };
+  });
+  validCols.forEach(({ col }) => {
+    students.forEach(s => {
+      const sec = s.section;
+      if (!sectionMap[sec]) sectionMap[sec] = { present: 0, total: 0 };
+      sectionMap[sec].total++;
+      const status = fullData[s.rowIdx][col];
+      if (status === true || String(status).toLowerCase() === "true") {
+        sectionMap[sec].present++;
+      }
+    });
+  });
+  const sectionData = Object.entries(sectionMap)
+    .filter(([, v]) => v.total > 0)
+    .map(([name, v]) => ({
+      name: 'شعبة ' + name,
+      rate: Math.round(v.present / v.total * 100)
+    }))
+    .sort((a, b) => b.rate - a.rate);
+
+  // ── توزيع أيام الأسبوع (الأحد-الخميس) ──
+  const weekSums   = [0, 0, 0, 0, 0];
+  const weekCounts = [0, 0, 0, 0, 0];
+  dateStats.forEach(({ dayOfWeek, rate }) => {
+    if (dayOfWeek >= 0 && dayOfWeek <= 4) {
+      weekSums[dayOfWeek]   += rate;
+      weekCounts[dayOfWeek] += 1;
+    }
+  });
+  const weekly = weekSums.map((sum, i) =>
+    weekCounts[i] > 0 ? Math.round(sum / weekCounts[i]) : 0
+  );
+
+  // ── الطلاب الأكثر غياباً ──
+  const absenceMap = {};
+  students.forEach(s => { absenceMap[s.id] = { name: s.name, count: 0 }; });
+  validCols.forEach(({ col }) => {
+    students.forEach(s => {
+      const status = fullData[s.rowIdx][col];
+      const isAbsent = (status === false || String(status).toLowerCase() === "false");
+      if (isAbsent && absenceMap[s.id]) absenceMap[s.id].count++;
+    });
+  });
+  const topAbsent = Object.values(absenceMap)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+    .filter(s => s.count > 0);
+
+  // ── المتوسط العام ──
+  const overallRate = dateStats.length > 0
+    ? Math.round(dateStats.reduce((s, d) => s + d.rate, 0) / dateStats.length)
+    : 0;
+
+  return {
+    trend: {
+      labels: trendData.map(d => d.label),
+      values: trendData.map(d => d.rate)
+    },
+    sections: sectionData,
+    weekly,
+    topAbsent,
+    meta: {
+      activeDays: validCols.length,
+      overallRate,
+      startDate: Utilities.formatDate(startDate, tz, "dd/MM"),
+      endDate:   Utilities.formatDate(endDate, tz, "dd/MM"),
+      noData: false
+    }
+  };
+}
